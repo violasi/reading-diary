@@ -8,6 +8,7 @@ import { useState } from 'react'
 import type { PackPiece } from '../types'
 import { modeOf } from '../types'
 import { usePagePlayer } from '../lib/audio'
+import { useSwipe } from '../lib/swipe'
 import { Play } from '../components/Icons'
 
 export default function Review({
@@ -31,8 +32,12 @@ export default function Review({
   const go = (next: number) => {
     stop()
     setPlaying(false)
-    setIdx(next)
+    setIdx(Math.max(0, Math.min(last, next)))
   }
+
+  // 复习页和阅读页一样以滑动为主：孩子点不准贴边的小箭头，
+  // 而边缘正好是安卓的系统手势区，一误触就退出了
+  const swipe = useSwipe(() => go(idx - 1), () => go(idx + 1))
 
   const listen = () => {
     if (playing) {
@@ -60,7 +65,10 @@ export default function Review({
         <span className="ml-auto shrink-0 text-[11px] text-mute">复习</span>
       </header>
 
-      <div className="relative flex min-h-0 flex-1 items-center justify-center p-2.5">
+      <div
+        className="relative flex min-h-0 flex-1 items-center justify-center p-2.5"
+        {...swipe}
+      >
         {page && urls[page.image] ? (
           <img
             src={urls[page.image]}
@@ -113,8 +121,9 @@ function Arrow({
       onClick={onClick}
       disabled={disabled}
       aria-label={side === 'left' ? '上一页' : '下一页'}
-      className={`absolute top-1/2 -translate-y-1/2 grid h-12 w-12 place-items-center rounded-full bg-black/25 text-2xl text-white ${
-        side === 'left' ? 'left-1' : 'right-1'
+      // 别贴边：安卓 10+ 左右边缘各约 20~24dp 是系统返回手势区
+      className={`absolute top-1/2 -translate-y-1/2 grid h-14 w-14 place-items-center rounded-full bg-black/30 text-3xl leading-none text-white ${
+        side === 'left' ? 'left-4' : 'right-4'
       } ${disabled ? 'pointer-events-none opacity-0' : ''}`}
     >
       {side === 'left' ? '‹' : '›'}
