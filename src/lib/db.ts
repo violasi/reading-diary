@@ -8,10 +8,12 @@
  *   stars:<date>      家长打的星
  *   done:<date>       当天全部篇目都读完了 —— 真正的「打卡章」
  *   settings          PIN、孩子名字
+ *   schemaVersion     数据结构版本，升级时用来判断要不要迁移
  *   dates             有任务包的日期列表（升序），日历和图书馆都用
  */
 import { get, set, del, keys } from 'idb-keyval'
 import type { DayProgress, PackManifest, PackPiece, Settings } from '../types'
+import { emptyProgress } from '../types'
 
 export interface StoredPack {
   manifest: PackManifest
@@ -21,6 +23,31 @@ export interface StoredPack {
 
 export const todayStr = (d = new Date()) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+/**
+ * 数据结构版本。
+ *
+ * App 升级后孩子的记录必须原样读出来，既不能被覆盖也不能被误读。两道保障：
+ *   1. loadProgress 读出来一律用 emptyProgress() 补齐字段 —— 以后给
+ *      PieceProgress 加新字段，老记录自动拿到默认值，不用写迁移。
+ *      （browsed 就是后加的，更早的记录里没有这个键。）
+ *   2. 真要改键的形状（比如 rec: 换命名、progress 拆表）时，在 migrate()
+ *      里加一步并把版本号 +1，别直接改读取逻辑。
+ */
+const SCHEMA_VERSION = 1
+
+export async function migrate(): Promise<{ from: number; to: number; steps: string[] }> {
+  const from = (await get<number>('schemaVersion')) ?? 0
+  const steps: string[] = []
+  if (from === SCHEMA_VERSION) return { from, to: SCHEMA_VERSION, steps }
+
+  // from < 1：browsed 是后加的字段，但 loadProgress 会补默认值，不必改写数据。
+  // 这一版只是把基线版本号落下来，供以后的迁移判断。
+  if (from < 1) steps.push('v1 基线')
+
+  await set('schemaVersion', SCHEMA_VERSION)
+  return { from, to: SCHEMA_VERSION, steps }
+}
 
 // ---- 任务包 ----
 export const savePack = async (pack: StoredPack) => {
@@ -41,8 +68,13 @@ export const deletePack = async (date: string) => {
 }
 
 // ---- 进度 ----
-export const loadProgress = async (date: string) =>
-  (await get<DayProgress>(`progress:${date}`)) ?? {}
+/** 读出来一律补齐字段，这样以后加新字段不会把老记录读成 undefined */
+export const loadProgress = async (date: string): Promise<DayProgress> => {
+  const raw = (await get<Record<string, Partial<DayProgress[string]>>>(`progress:${date}`)) ?? {}
+  const out: DayProgress = {}
+  for (const [id, p] of Object.entries(raw)) out[id] = { ...emptyProgress(), ...p }
+  return out
+}
 
 export const saveProgress = (date: string, p: DayProgress) => set(`progress:${date}`, p)
 

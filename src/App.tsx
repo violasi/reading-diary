@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { DayProgress } from './types'
 import { emptyProgress, isPieceDone } from './types'
 import {
+  migrate,
   loadDoneDates,
   markDayDone,
   loadPack,
@@ -39,6 +40,8 @@ export default function App() {
 
   // 首次加载：今天的任务包 + 进度 + 全部打卡日
   const reload = useCallback(async () => {
+    // 升级后第一次打开可能要迁移数据，必须在读之前跑完
+    await migrate()
     const [p, prog, done] = await Promise.all([
       loadPack(date),
       loadProgress(date),

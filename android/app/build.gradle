@@ -1,0 +1,88 @@
+
+/*
+ * 固定签名。安卓只允许「同一签名」的包原地覆盖升级；签名一变就必须先卸载，
+ * 而卸载会连着 IndexedDB 一起清掉 —— 也就是清掉孩子所有的阅读记录和录音。
+ *
+ * 所以密钥不能依赖 ~/.android/debug.keystore（换机器、重装系统、清缓存都会
+ * 让 gradle 重新生成一个，签名就变了）。这里钉在项目内的固定文件上，
+ * 并且找不到就直接构建失败 —— 宁可不出包，也不要悄悄用新密钥签出一个
+ * 装不上去的 APK。
+ *
+ * android/keystore/ 不入库（见 .gitignore），务必单独备份这个文件。
+ */
+def keystoreFile = rootProject.file('keystore/reading-diary.keystore')
+
+apply plugin: 'com.android.application'
+
+android {
+    signingConfigs {
+        stable {
+            if (!keystoreFile.exists()) {
+                throw new GradleException(
+                    "缺少签名密钥 ${keystoreFile}。\n" +
+                    "用它签出的包才能覆盖升级、保住孩子的阅读记录。\n" +
+                    "从备份里恢复这个文件后再构建；实在没有备份，就只能卸载重装（记录会丢）。")
+            }
+            storeFile keystoreFile
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }
+
+    namespace "com.family.readingdiary"
+    compileSdk rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "com.family.readingdiary"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 1
+        versionName "1.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.stable
+        }
+
+        release {
+            signingConfig signingConfigs.stable
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}

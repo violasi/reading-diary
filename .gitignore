@@ -10,8 +10,20 @@ packs/
 # 缺图时 App 会静默降级，不会碎掉。
 public/images/ultraman/
 
-# Capacitor 原生工程：由 npx cap add android 生成，可重建
-android/
+# Capacitor 原生工程：**要入库**。里面有录音权限、allowBackup=false、竖屏锁定、
+# 阿里云镜像、gradle 版本这些手工定制，重新 cap add 会静默丢掉。
+# 只忽略生成物和机器相关的部分：
+android/build/
+android/app/build/
+android/.gradle/
+android/local.properties
+# cap sync 的产物，且含版权素材（奥特曼图），绝不能从这里漏进公开仓库
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json
+android/capacitor-cordova-android-plugins/
+# 签名密钥：丢了就只能卸载重装（等于清空孩子的阅读记录），单独备份、别入库
+android/keystore/
 # 打好的 APK
 out/
 
