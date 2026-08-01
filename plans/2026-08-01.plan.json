@@ -1,0 +1,72 @@
+{
+  "date": "2026-08-01",
+  "child": "",
+  "note": "素材为家庭自用读物，任务包仅在本机与孩子平板之间传递。",
+  "pieces": [
+    {
+      "id": "p1",
+      "title": "All Kinds of Faces",
+      "lang": "en-US",
+      "level": "RAZ Level A",
+      "source": "All Kinds of Faces.pdf（Learning A-Z，Written by Annette Carruthers）",
+      "source_dir": "build/all-kinds-of-faces",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
+    },
+    {
+      "id": "p2",
+      "title": "Bird Colors",
+      "lang": "en-US",
+      "level": "RAZ Level A",
+      "source": "Bird Colors.pdf（Learning A-Z，Written by Anthony Curran）",
+      "source_dir": "build/bird-colors",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ]
+    },
+    {
+      "id": "p3",
+      "title": "森林里的一年",
+      "lang": "zh-CN",
+      "source": "森林里的一年_绘本.pdf（艾丽斯·梅尔文 文/图，陈静 译，北京联合出版公司）",
+      "source_dir": "build/forest-year",
+      "cover_page": 1,
+      "pages": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    }
+  ]
+}

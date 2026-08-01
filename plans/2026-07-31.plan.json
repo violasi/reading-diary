@@ -1,0 +1,27 @@
+{
+  "date": "2026-07-31",
+  "child": "",
+  "note": "素材为家庭自用的分级读物，任务包仅在本机与孩子平板之间传递。",
+  "pieces": [
+    {
+      "id": "p1",
+      "title": "All Kinds of Faces",
+      "lang": "en-US",
+      "level": "RAZ Level A",
+      "source": "All Kinds of Faces.pdf（Learning A-Z，Written by Annette Carruthers）",
+      "source_dir": "build/all-kinds-of-faces",
+      "cover_page": 1,
+      "pages": [3, 4, 5, 6, 7, 8, 9, 10]
+    },
+    {
+      "id": "p2",
+      "title": "Bird Colors",
+      "lang": "en-US",
+      "level": "RAZ Level A",
+      "source": "Bird Colors.pdf（Learning A-Z，Written by Anthony Curran）",
+      "source_dir": "build/bird-colors",
+      "cover_page": 1,
+      "pages": [3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    }
+  ]
+}

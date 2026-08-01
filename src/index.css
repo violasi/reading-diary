@@ -1,0 +1,37 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-water: #2e9fd4; /* 鱼 / 第二关 */
+  --color-sun: #f5a524; /* 蝴蝶 / 主按钮 */
+  --color-ultra: #d93b3b; /* 奥特曼 / 第三关 */
+  --color-deep: #1d5f8a; /* 顶栏 */
+  --color-sand: #f2efe9; /* 页面底色 */
+  --color-ink: #2c2925;
+  --color-mute: #a49a8c;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-sand);
+  color: var(--color-ink);
+  font-family:
+    -apple-system, 'PingFang SC', 'Noto Sans SC', 'Helvetica Neue', system-ui, sans-serif;
+  /* 给小孩用的全屏应用：不要文本选中、不要橡皮筋、不要双击缩放 */
+  -webkit-user-select: none;
+  user-select: none;
+  overscroll-behavior: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 所有可点区域至少 64px，小孩点不准 */
+.tap {
+  min-height: 64px;
+  min-width: 64px;
+}
