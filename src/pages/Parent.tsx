@@ -318,10 +318,13 @@ function ParentPanel({
         >
           ＋ 导入任务包（.rdpkg）
         </button>
+        {/* accept 不能只写 .rdpkg：安卓的文档选择器按 MIME 过滤，未知扩展名
+            没有对应 MIME，文件会被灰掉、根本选不中。放开成任意类型，选错了
+            由 importPack 校验后明确报错 —— 这比在平板上选不中文件好得多 */}
         <input
           ref={fileRef}
           type="file"
-          accept=".rdpkg,.zip,application/zip"
+          accept="*/*"
           className="hidden"
           onChange={(e) => void pick(e.target.files?.[0])}
         />
