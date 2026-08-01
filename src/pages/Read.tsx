@@ -5,6 +5,7 @@ import HeroImg from '../components/HeroImg'
 import { Bolt, Butterfly, Fish, Play } from '../components/Icons'
 import { useRecorder } from '../lib/recorder'
 import { setBackGuard } from '../lib/back'
+import { useSwipe } from '../lib/swipe'
 
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 
@@ -202,6 +203,11 @@ export default function Read({
   const showRecord = mode === 'browse' ? stage === 2 : stage === 3
   const lastPage = piece.pages.length - 1
 
+  // 翻页统一走这里：箭头和滑动共用，边界自己夹住
+  const turnTo = (i: number) => setTurnIdx(Math.max(0, Math.min(lastPage, i)))
+  const canTurn = mode === 'browse' || stage === 3
+  const swipe = useSwipe(() => turnTo(turnIdx - 1), () => turnTo(turnIdx + 1))
+
   const handleBack = () => {
     if (rec.state === 'recording' && !window.confirm('正在录音，真的要离开吗？')) return
     if (
@@ -250,7 +256,10 @@ export default function Read({
 
       {/* 中部：整页原图。min-h-0 是关键 —— 否则 flex 子项按内容撑开，
           底部那行字会被裁掉，而那行字正是孩子要读的内容 */}
-      <div className="relative flex min-h-0 flex-1 items-center justify-center p-2.5">
+      <div
+        className="relative flex min-h-0 flex-1 items-center justify-center p-2.5"
+        {...(canTurn ? swipe : {})}
+      >
         {shownPage && urls[shownPage.image] ? (
           <img
             src={urls[shownPage.image]}
@@ -271,11 +280,11 @@ export default function Read({
         {/* 孩子自己翻页：第三关边翻边读，纯图绘本全程都能翻 */}
         {(mode === 'browse' || stage === 3) && (
           <>
-            <PageArrow side="left" disabled={turnIdx === 0} onClick={() => setTurnIdx((i) => i - 1)} />
+            <PageArrow side="left" disabled={turnIdx === 0} onClick={() => turnTo(turnIdx - 1)} />
             <PageArrow
               side="right"
               disabled={turnIdx >= lastPage}
-              onClick={() => setTurnIdx((i) => i + 1)}
+              onClick={() => turnTo(turnIdx + 1)}
             />
             <span className="absolute bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-black/45 px-2.5 py-0.5 text-[11px] font-bold text-white">
               {turnIdx + 1} / {piece.pages.length}
@@ -346,21 +355,27 @@ export default function Read({
           </>
         )}
 
-        {/* 纯图绘本第一步：自由浏览。大人念、孩子翻，没有音频可放，
-            所以不设门槛 —— 孩子说看完了就是看完了 */}
+        {/* 纯图绘本第一步：自由浏览。大人念、孩子翻。
+            「看完啦」只在最后一页出现 —— 实际用起来孩子会在翻页时误触它，
+            一按就跳去录音、这本书当场算看完了。放到末页等于用「翻到底」
+            代替确认，既防误触，也不用孩子瞄准任何小按钮。 */}
         {showBrowse && (
           <>
-            <button
-              onClick={() => onProgress({ browsed: true })}
-              className="tap w-full rounded-2xl bg-sun py-4 text-xl font-extrabold text-white active:bg-sun/85"
-            >
-              看完啦 →
-            </button>
-            <p className="mt-2 text-center text-[11.5px] text-mute">
-              {turnIdx >= lastPage
-                ? '最后一页了，看完就点上面'
-                : `和爸爸妈妈一起看，左右翻页（第 ${turnIdx + 1} / ${piece.pages.length} 页）`}
-            </p>
+            {turnIdx >= lastPage ? (
+              <button
+                onClick={() => onProgress({ browsed: true })}
+                className="tap w-full rounded-2xl bg-sun py-4 text-xl font-extrabold text-white active:bg-sun/85"
+              >
+                看完啦 →
+              </button>
+            ) : (
+              <p className="py-2 text-center text-[13px] font-bold text-[#6f665a]">
+                和爸爸妈妈一起看 · 左右滑动翻页
+                <span className="ml-1.5 font-normal text-mute">
+                  第 {turnIdx + 1} / {piece.pages.length} 页
+                </span>
+              </p>
+            )}
           </>
         )}
 
@@ -545,7 +560,9 @@ function PageArrow({
       onClick={onClick}
       disabled={disabled}
       aria-label={side === 'left' ? '上一页' : '下一页'}
-      className={`tap absolute ${side === 'left' ? 'left-1' : 'right-1'} top-1/2 grid -translate-y-1/2 place-items-center rounded-full bg-black/35 text-3xl leading-none text-white active:bg-black/55 ${
+      // 不能贴边：安卓 10+ 左右边缘各约 20~24dp 是系统返回手势区，
+      // 按钮压在那儿孩子一点就把阅读退出了。往里挪、并且做大一点好按。
+      className={`tap absolute ${side === 'left' ? 'left-4' : 'right-4'} top-1/2 grid h-14 w-14 -translate-y-1/2 place-items-center rounded-full bg-black/30 text-3xl leading-none text-white active:bg-black/55 ${
         disabled ? 'opacity-0' : ''
       }`}
     >
