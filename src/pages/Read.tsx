@@ -8,14 +8,6 @@ import { setBackGuard } from '../lib/back'
 
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 
-/** 试听刚录的那段。用完即 revoke，否则每次试听都漏一个 URL */
-function playBlob(blob: Blob) {
-  const url = URL.createObjectURL(blob)
-  const a = new Audio(url)
-  a.onended = a.onerror = () => URL.revokeObjectURL(url)
-  void a.play().catch(() => URL.revokeObjectURL(url))
-}
-
 interface Props {
   piece: PackPiece
   urls: Record<string, string>
@@ -63,22 +55,55 @@ export default function Read({
     mode === 'browse' ? turnIdx : stage === 1 ? listenIdx : stage === 3 ? turnIdx : readIdx
   const shownPage = piece.pages[shownIdx]
 
+  /**
+   * 播放代号。speechSynthesis.cancel() 之后被取消的那条 utterance 仍可能
+   * 触发 onend —— 第一关的 onDone 是「翻到下一页并继续播」，孩子点了停止
+   * 却还在自动翻页、还在记进度。换一个代号就让在飞的回调全部作废。
+   */
+  const genRef = useRef(0)
+
+  /**
+   * 试听刚录的那段。必须握在 ref 里 —— 之前是每次现造一个游离的 Audio，
+   * 谁都停不住它：孩子点了试听马上返回，那段录音会在首页继续响到播完。
+   */
+  const previewRef = useRef<{ audio: HTMLAudioElement; url: string } | null>(null)
+
+  const stopPreview = () => {
+    const p = previewRef.current
+    if (!p) return
+    previewRef.current = null
+    p.audio.onended = null
+    p.audio.onerror = null
+    p.audio.pause()
+    URL.revokeObjectURL(p.url) // 不 revoke 的话每次试听漏一个
+  }
+
+  const playPreview = (blob: Blob) => {
+    stopPreview() // 连点两次不要叠着放
+    const url = URL.createObjectURL(blob)
+    const audio = new Audio(url)
+    previewRef.current = { audio, url }
+    audio.onended = stopPreview
+    audio.onerror = stopPreview
+    void audio.play().catch(stopPreview)
+  }
+
   // 离开时一定要停掉音频和朗读，否则会在后台继续响
   useEffect(() => {
     const a = audioRef.current!
     return () => {
+      // 卸载同样要作废回调：孩子在「听故事」时按实体返回键就走这条路，
+      // 而 a.src = '' 在部分浏览器本身会触发一次 error 事件 —— 不作废的话
+      // 那次 error 会把 step() 再往下推一页，人都走了还在记进度
+      genRef.current++
+      a.onended = null
+      a.onerror = null
       a.pause()
       a.src = ''
       window.speechSynthesis?.cancel()
+      stopPreview()
     }
   }, [])
-
-  /**
-   * 播放代号。speechSynthesis.cancel() 之后被取消的那条 utterance 仍可能
-   * 触发 onend —— 第一关的 onDone 是「翻到下一页并继续播」，孩子点了停止
-   * 却还在自动翻页、还在记进度。每次 stopAll 就换一个代号，旧回调作废。
-   */
-  const genRef = useRef(0)
 
   const speak = (text: string, onDone: () => void) => {
     const synth = window.speechSynthesis
@@ -123,6 +148,7 @@ export default function Read({
     genRef.current++ // 作废所有在飞的回调
     audioRef.current!.pause()
     window.speechSynthesis?.cancel()
+    stopPreview()
     setPlaying(false)
   }
 
@@ -377,14 +403,17 @@ export default function Read({
             {rec.state === 'done' && rec.blob && (
               <>
                 <button
-                  onClick={() => playBlob(rec.blob!)}
+                  onClick={() => playPreview(rec.blob!)}
                   className="tap flex w-full items-center justify-center gap-2 rounded-2xl bg-[#f1ece3] py-3.5 text-[15px] font-bold text-[#6f665a] active:bg-[#e7e0d4]"
                 >
                   <Play className="h-4 w-4" /> 听听我读的（{fmt(rec.seconds)}）
                 </button>
                 <div className="mt-2.5 flex gap-2.5">
                   <button
-                    onClick={rec.reset}
+                    onClick={() => {
+                      stopPreview()
+                      rec.reset()
+                    }}
                     className="tap flex-1 rounded-2xl bg-[#f1ece3] py-3.5 text-[15px] font-bold text-[#6f665a]"
                   >
                     重录

@@ -10,10 +10,14 @@ export function usePagePlayer(lang = 'en-US') {
   // 取消后旧回调还可能触发（TTS 尤其），换代号作废掉
   const genRef = useRef(0)
 
-  // 离开时一定要停掉音频和朗读，否则会在后台继续响
+  // 离开时一定要停掉音频和朗读，否则会在后台继续响。
+  // 同样要先作废回调 —— a.src = '' 在部分浏览器会触发 error 事件
   useEffect(() => {
     const a = audioRef.current!
     return () => {
+      genRef.current++
+      a.onended = null
+      a.onerror = null
       a.pause()
       a.src = ''
       window.speechSynthesis?.cancel()

@@ -59,7 +59,7 @@ src/
 
 ### 方式一：装 APK（推荐，录音最稳）
 
-已经打好了：`out/阅读打卡日记-debug.apk`（4.4 MB）。用数据线连上平板后：
+已经打好了：`out/阅读打卡日记-debug.apk`（约 4.5 MB）。用数据线连上平板后：
 
 ```bash
 ~/Library/Android/sdk/platform-tools/adb install -r "out/阅读打卡日记-debug.apk"
@@ -68,11 +68,15 @@ src/
 或者把 apk 拷到平板上直接点开装（要先允许「未知来源」）。已锁竖屏，
 `RECORD_AUDIO` / `MODIFY_AUDIO_SETTINGS` 都声明好了，首次录音时系统会弹一次权限。
 
-重新打包：
+重新打包 —— **一条命令，别手动分步跑**：
 
 ```bash
-npm run build && npx cap sync android && (cd android && JAVA_HOME=$(/usr/libexec/java_home -v 21) ./gradlew assembleDebug)
+npm run apk
 ```
+
+`scripts/build-apk.sh` 会依次做完 构建前端 → `cap sync` → `assembleDebug` → 拷到 `out/`，
+中间还会校验同步进原生工程的产物和 `dist` 一致。分步手动跑最容易只执行了
+`npm run build` 就去装 APK，装到的其实是上一次的前端产物（踩过一次）。
 
 构建注意（都已配好，写下来免得以后踩）：
 - 本机没有 cmdline-tools，装不了新 SDK 组件，所以钉在 `compileSdk 34` + `build-tools 34.0.0`
@@ -108,7 +112,7 @@ https 地址，平板 Chrome 打开、加到主屏。数据全在平板本地 In
 - [x] 家长模式：PIN（默认 `123`）、听录音、点星即存、导入任务包、改密码
 - [x] 进度、录音、星星全部落盘，刷新不丢
 - [x] 「我的书架」：所有导入过的书按书名去重（同名取最新），复习模式不录音、不写进度
-- [x] 家长维护：清空今天 / 全部清零（打字确认）、手动清理已评分旧录音（带占用显示）
+- [x] 家长维护：清空今天 / 全部清零（打字确认，只清记录不动书）、手动清理已评分旧录音（带占用显示）
 - [x] 打卡章按「当天全部读完」盖（绘本浏览完即算，录音可选）
 - [x] 跨零点自动切到新一天（回前台 + 每分钟兜底）
 - [x] Capacitor 打 APK、锁竖屏、接安卓返回键

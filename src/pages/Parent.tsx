@@ -217,7 +217,11 @@ function ParentPanel({
 
   /** 清今天：家长自己试玩过、要让孩子从干净的今天开始 */
   const resetToday = async () => {
-    if (!window.confirm(`清空 ${date} 的记录？\n\n三关进度、星星、录音都会删掉，孩子今天可以重新读一遍。今天的任务包和以前的打卡都不动。`))
+    if (
+      !window.confirm(
+        `清空 ${date} 的记录？\n\n这天的进度、星星、录音都会删掉，孩子今天可以重新读一遍。\n书和以前的打卡都不动。`,
+      )
+    )
       return
     await clearDay(date)
     setStars({})
@@ -229,14 +233,14 @@ function ParentPanel({
   /** 全部清零：交给孩子之前抹掉试玩痕迹。要打字确认，误触代价太大 */
   const resetAll = async () => {
     const v = window.prompt(
-      '清空全部打卡记录？\n\n所有日期的进度、星星、录音、陪读奥特曼都会删掉。\n打卡日历会变空，「读过的书」书架也会变空（书架只收读完过的书）。\n今天的任务包还在，孩子可以从头再读一遍。\n\n确认请输入：清空',
+      '清空全部打卡记录？\n\n所有日期的进度、星星、录音都会删掉，打卡日历会变空。\n书和书架不受影响 —— 导入过的书都还在，孩子照样能读、能复习。\n\n确认请输入：清空',
     )
     if (v === null) return
     if (v.trim() !== '清空') return setErr('没有清空（要输入「清空」两个字）')
     const n = await clearAllProgress()
     setStars({})
     setRecs({})
-    setNotice(`已清零，删掉 ${n} 条记录。任务包还在，孩子可以重新读`)
+    setNotice(`已清零，删掉 ${n} 条记录。书都还在，孩子可以重新读`)
     onDataChanged()
   }
 
@@ -343,7 +347,7 @@ function ParentPanel({
             />
             <MaintRow
               label="清空全部打卡记录"
-              hint="抹掉全部试玩痕迹。日历和书架都会变空，任务包还在"
+              hint="抹掉全部试玩痕迹，日历变空。书和书架都不受影响"
               danger
               onClick={() => void resetAll()}
             />
