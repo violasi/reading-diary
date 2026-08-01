@@ -1,0 +1,37 @@
+{
+  "date": "2026-08-02",
+  "child": "",
+  "note": "素材为家庭自用的分级读物，任务包仅在本机与孩子平板之间传递。",
+  "pieces": [
+    {
+      "id": "p1",
+      "title": "Bird Goes Home",
+      "lang": "en-US",
+      "level": "RAZ Level A",
+      "source": "Bird Goes Home.pdf（Learning A-Z，Written by Cheryl Ryan，Illustrated by Signe Nordin）",
+      "source_dir": "build/bird-goes-home",
+      "cover_page": 1,
+      "pages": [3, 4, 5, 6, 7, 8, 9, 10]
+    },
+    {
+      "id": "p2",
+      "title": "Carlos Counts Kittens",
+      "lang": "en-US",
+      "level": "RAZ Level A",
+      "source": "Carlos Count Kittens.pdf（Learning A-Z，Written by Lorena F. Di Bello，Illustrated by Angela Kamstra-Jacobson）",
+      "source_dir": "build/carlos-count-kittens",
+      "cover_page": 1,
+      "pages": [3, 4, 5, 6, 7, 8, 9, 10]
+    },
+    {
+      "id": "p3",
+      "title": "Carlos Goes to School",
+      "lang": "en-US",
+      "level": "RAZ Level A",
+      "source": "Carlos Goes to School.pdf（Learning A-Z，Written by Lorena F. DiBello，Illustrated by Angela Kamstra-Jacobson）",
+      "source_dir": "build/carlos-goes-to-school",
+      "cover_page": 1,
+      "pages": [3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    }
+  ]
+}
