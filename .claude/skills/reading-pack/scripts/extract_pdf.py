@@ -8,6 +8,14 @@
   · RichMedia 型（RAZ / Reading A-Z 等）—— 每页一个 /Subtype /Sound 注释，内含 mp3
   · 无音频型 —— 只出页面图，朗读交给 App 的 TTS（此时 plan 里需补 text）
 
+  · --layout=picturebook —— 亲子阅读绘本专用。有些绘本 PDF 是「一张高清跨页扫图
+    ＋ 一段转录文字」拼在 A4 版面上，四周大片空白、还印着大号页码。整页缩放渲染
+    会把高清插图压小、文字也跟着糊；更糟的是这类 PDF 常用子集化的 CJK 内嵌字体
+    （如 MPDFAA+HiraginoSansGBW3，Type0/Identity-H），MuPDF 解不开字形映射，
+    整段文字会渲染成空白或错字 —— 看起来就像「原文的大字被删掉了」。
+    这个模式改成：取内嵌插图的原始像素 + 用 PyMuPDF 自带的 CJK 字体把
+    get_text() 读出的文字重新排在图下面，字号按输出宽度放大到孩子看得清。
+
 产出（默认在 <out>/ 下）：
   pages/pNN.jpg     整页图，直接给孩子看
   audio/<原始名>     每页音频，保留 PDF 内的原始命名
@@ -15,6 +23,7 @@
 
 用法：
   uv run --with pymupdf python extract_pdf.py <input.pdf> <out_dir> [--width 900]
+  uv run --with pymupdf python extract_pdf.py <绘本.pdf> <out_dir> --layout=picturebook --width=1400
 """
 
 import json
@@ -27,6 +36,66 @@ import fitz  # pymupdf
 
 DEFAULT_WIDTH = 900  # 页面图宽度（px），平板上够清晰又不让包变胖
 AUDIO_EXTS = (".mp3", ".m4a", ".wav", ".mp4")
+
+# picturebook 模式的排版常数
+PB_PAD = 40           # 四边留白（按输出宽度 1400 校的）
+PB_FONT_DIVISOR = 26  # 字号 = 输出宽度 / 这个数：1400 → 54px，孩子一臂距离看得清
+PB_LINE_HEIGHT = 1.5
+
+
+def render_picturebook_page(doc, page, out_path: Path, width: int) -> None:
+    """
+    绘本页：内嵌插图原始像素 + 重新排版的文字。见模块头 --layout=picturebook 说明。
+
+    找不到内嵌图就退回整页渲染 —— 至少不会产出空白页。
+    """
+    images = page.get_images()
+    if not images:
+        scale = width / page.rect.width
+        page.get_pixmap(matrix=fitz.Matrix(scale, scale)).save(out_path, jpg_quality=82)
+        return
+
+    # 取面积最大的那张，就是跨页插图；页码之类的小图不要
+    xref = max(images, key=lambda im: im[2] * im[3])[0]
+    pix = fitz.Pixmap(doc, xref)
+    if pix.alpha:  # 带透明通道的话 JPEG 存不了
+        pix = fitz.Pixmap(fitz.csRGB, pix)
+
+    text = page.get_text().strip()
+    img_h = round(width * pix.height / pix.width)
+    font_size = round(width / PB_FONT_DIVISOR)
+
+    text_h = 0
+    if text:
+        # 先在一张很高的临时页上量文字真正占多高，避免猜高度猜不准
+        scratch = fitz.open()
+        sp = scratch.new_page(width=width, height=8000)
+        left = sp.insert_textbox(
+            fitz.Rect(PB_PAD, 0, width - PB_PAD, 8000),
+            text,
+            fontsize=font_size,
+            fontname="china-s",  # PyMuPDF 自带简体中文，不依赖系统字体
+            lineheight=PB_LINE_HEIGHT,
+        )
+        text_h = round(8000 - left) + PB_PAD
+        scratch.close()
+
+    out = fitz.open()
+    canvas = out.new_page(width=width, height=img_h + text_h + PB_PAD)
+    canvas.draw_rect(canvas.rect, color=None, fill=(1, 1, 1))
+    canvas.insert_image(fitz.Rect(0, 0, width, img_h), pixmap=pix)
+    if text:
+        canvas.insert_textbox(
+            fitz.Rect(PB_PAD, img_h + PB_PAD * 0.6, width - PB_PAD, img_h + text_h + PB_PAD),
+            text,
+            fontsize=font_size,
+            fontname="china-s",
+            lineheight=PB_LINE_HEIGHT,
+            color=(0.12, 0.11, 0.1),
+        )
+    # dpi=96 时 1pt=1px，页面尺寸就是像素尺寸
+    canvas.get_pixmap(dpi=96).save(out_path, jpg_quality=82)
+    out.close()
 
 
 def utf16_hex_to_str(s: str) -> str:
@@ -120,9 +189,12 @@ def main():
         print(__doc__)
         sys.exit(1)
     width = DEFAULT_WIDTH
+    layout = "page"
     for a in sys.argv[1:]:
         if a.startswith("--width"):
             width = int(a.split("=", 1)[1]) if "=" in a else width
+        elif a.startswith("--layout"):
+            layout = a.split("=", 1)[1] if "=" in a else layout
 
     pdf_path, out_dir = Path(args[0]), Path(args[1])
     (out_dir / "pages").mkdir(parents=True, exist_ok=True)
@@ -133,10 +205,13 @@ def main():
     pages = []
     for pno, page in enumerate(doc, start=1):
         img_rel = f"pages/p{pno:02d}.jpg"
-        scale = width / page.rect.width
-        page.get_pixmap(matrix=fitz.Matrix(scale, scale)).save(
-            out_dir / img_rel, jpg_quality=78
-        )
+        if layout == "picturebook":
+            render_picturebook_page(doc, page, out_dir / img_rel, width)
+        else:
+            scale = width / page.rect.width
+            page.get_pixmap(matrix=fitz.Matrix(scale, scale)).save(
+                out_dir / img_rel, jpg_quality=78
+            )
 
         audio_rel, dur = None, None
         if pno in page_audio:
