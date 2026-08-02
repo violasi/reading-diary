@@ -1,0 +1,91 @@
+{
+  "date": "2026-08-08",
+  "child": "",
+  "note": "素材为家庭自用读物，任务包仅在本机与孩子平板之间传递。",
+  "pieces": [
+    {
+      "id": "p1",
+      "title": "Spring Weather",
+      "lang": "en-US",
+      "level": "RAZ Level A",
+      "source": "Spring Weather.pdf（Learning A-Z）",
+      "source_dir": "build/spring-weather",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
+    },
+    {
+      "id": "p2",
+      "title": "The Rainstorm",
+      "lang": "en-US",
+      "level": "RAZ Level A",
+      "source": "The Rainstorm.pdf（Learning A-Z）",
+      "source_dir": "build/the-rainstorm",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
+    },
+    {
+      "id": "p3",
+      "title": "Shapes in Nature",
+      "lang": "en-US",
+      "level": "RAZ Level A",
+      "source": "Shapes in Nature.pdf（Learning A-Z）",
+      "source_dir": "build/shapes-in-nature",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
+    },
+    {
+      "title": "牵牛花",
+      "lang": "zh-CN",
+      "level": "一粒种子的旅程",
+      "source": "牵牛花_绘本.pdf（[日]荒井真纪 著，黄锐 译，新星出版社；原作 ASAGAO，KIN-NO-HOSHI SHA 2011）",
+      "source_dir": "build/morning-glory",
+      "cover_page": 1,
+      "pages": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17
+      ],
+      "id": "p4"
+    }
+  ]
+}

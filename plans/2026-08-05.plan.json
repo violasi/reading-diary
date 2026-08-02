@@ -1,0 +1,91 @@
+{
+  "date": "2026-08-05",
+  "child": "",
+  "note": "素材为家庭自用读物，任务包仅在本机与孩子平板之间传递。",
+  "pieces": [
+    {
+      "id": "p1",
+      "title": "In and Out",
+      "lang": "en-US",
+      "level": "RAZ Level A",
+      "source": "In and Out.pdf（Learning A-Z）",
+      "source_dir": "build/in-and-out",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
+    },
+    {
+      "id": "p2",
+      "title": "Up and Down",
+      "lang": "en-US",
+      "level": "RAZ Level A",
+      "source": "Up and Down.pdf（Learning A-Z）",
+      "source_dir": "build/up-and-down",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
+    },
+    {
+      "id": "p3",
+      "title": "Hot and Cold",
+      "lang": "en-US",
+      "level": "RAZ Level A",
+      "source": "Hot and Cold.pdf（Learning A-Z）",
+      "source_dir": "build/hot-and-cold",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
+    },
+    {
+      "title": "牵牛花",
+      "lang": "zh-CN",
+      "level": "一粒种子的旅程",
+      "source": "牵牛花_绘本.pdf（[日]荒井真纪 著，黄锐 译，新星出版社；原作 ASAGAO，KIN-NO-HOSHI SHA 2011）",
+      "source_dir": "build/morning-glory",
+      "cover_page": 1,
+      "pages": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17
+      ],
+      "id": "p4"
+    }
+  ]
+}
