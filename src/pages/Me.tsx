@@ -23,6 +23,7 @@ export default function Me({
 
   useEffect(() => {
     let alive = true
+    setDay(null)
     void loadDaySummary(picked).then((d) => {
       if (alive) setDay(d)
     })
