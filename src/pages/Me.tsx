@@ -1,27 +1,35 @@
 import { useEffect, useMemo, useState } from 'react'
 import HeroImg from '../components/HeroImg'
-import { loadStars } from '../lib/db'
+import { loadDaySummary } from '../lib/db'
 import { Star } from '../components/Icons'
-import type { PackManifest } from '../types'
+
 
 /** 我的：一页滚动，不分 tab。日历本身就是收集册 */
+type DaySummary = Awaited<ReturnType<typeof loadDaySummary>>
+
 export default function Me({
   date,
-  manifest,
   doneDates,
   onExit,
 }: {
   date: string
-  manifest: PackManifest | null
   /** 真正读完的日子。统计和盖章都以这个为准 */
   doneDates: string[]
   onExit: () => void
 }) {
-  const [stars, setStars] = useState<Record<string, number>>({})
+  // 日历和星星是联动的：点哪天就看那天读了什么、得了几星。默认看今天
+  const [picked, setPicked] = useState(date)
+  const [day, setDay] = useState<DaySummary | null>(null)
 
   useEffect(() => {
-    void loadStars(date).then(setStars)
-  }, [date])
+    let alive = true
+    void loadDaySummary(picked).then((d) => {
+      if (alive) setDay(d)
+    })
+    return () => {
+      alive = false
+    }
+  }, [picked])
 
   // 盖章只看「读完了」。只点进来挑了个奥特曼的日子不算 ——
   // 否则连续天数会虚高，孩子一眼就看出来这章不值钱
@@ -59,11 +67,12 @@ export default function Me({
               c === null ? (
                 <span key={i} />
               ) : (
-                <span
+                <button
                   key={i}
-                  className={`grid aspect-square place-items-center rounded-md text-[11px] ${
+                  onClick={() => setPicked(c.iso)}
+                  className={`tap grid aspect-square place-items-center rounded-md text-[11px] ${
                     done.has(c.iso) ? 'bg-[#fdeed3] p-0.5' : 'bg-sand text-[#c2b9ab]'
-                  }`}
+                  } ${picked === c.iso ? 'ring-2 ring-sun' : ''}`}
                 >
                   {done.has(c.iso) ? (
                     <HeroImg
@@ -73,28 +82,41 @@ export default function Me({
                   ) : (
                     c.day
                   )}
-                </span>
+                </button>
               ),
             )}
           </div>
         </section>
 
         <section className="rounded-2xl bg-white p-3 shadow-sm">
-          <h3 className="mb-1 text-[13px] text-[#6f665a]">爸爸妈妈的星星</h3>
-          {!manifest && <p className="py-3 text-center text-[12px] text-mute">今天还没有任务</p>}
-          {manifest?.pieces.map((p) => (
+          <h3 className="mb-1 flex items-baseline justify-between text-[13px] text-[#6f665a]">
+            <span>{picked === date ? '今天读的' : `${picked.slice(5)} 读的`}</span>
+            <span className="text-[11px] font-normal text-mute">
+              {picked === date ? '点日历看以前' : '点日历换一天'}
+            </span>
+          </h3>
+
+          {day === null && <p className="py-3 text-center text-[12px] text-mute">载入中…</p>}
+          {day && !day.books.length && (
+            <p className="py-3 text-center text-[12px] text-mute">
+              {picked === date ? '今天还没有任务' : '这天没有布置任务'}
+            </p>
+          )}
+          {day?.books.map((b) => (
             <div
-              key={p.id}
+              key={b.id}
               className="flex items-center justify-between border-t border-[#f4f0e8] py-2 text-[12px] first:border-0"
             >
-              <span className="truncate pr-2">{p.title}</span>
+              <span className="truncate pr-2">
+                {b.title}
+                {/* 没读完的书标出来，否则「没星」看着像家长忘了打分 */}
+                {!b.finished && <span className="ml-1 text-[10.5px] text-mute">未读完</span>}
+              </span>
               <span className="flex shrink-0 gap-0.5">
                 {[1, 2, 3, 4, 5].map((n) => (
                   <Star
                     key={n}
-                    className={`h-4 w-4 ${
-                      n <= (stars[p.id] ?? 0) ? 'text-sun' : 'text-[#ddd6ca]'
-                    }`}
+                    className={`h-4 w-4 ${n <= b.stars ? 'text-sun' : 'text-[#ddd6ca]'}`}
                   />
                 ))}
               </span>

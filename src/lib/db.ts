@@ -14,7 +14,7 @@
  */
 import { get, set, del, keys, getMany, setMany, delMany } from 'idb-keyval'
 import type { DayProgress, PackManifest, PackPiece, Settings } from '../types'
-import { emptyProgress } from '../types'
+import { emptyProgress, isPieceDone } from '../types'
 
 export interface StoredPack {
   manifest: PackManifest
@@ -228,6 +228,32 @@ export const gcBlobs = async (): Promise<{ removed: number }> => {
   const orphans = ks.filter((k) => k.startsWith('blob:') && !referenced.has(k))
   if (orphans.length) await delMany(orphans)
   return { removed: orphans.length }
+}
+
+/**
+ * 某一天读了什么 + 得了几星。「我的」页点日历回顾用。
+ *
+ * 只读 manifest 和星星，**不碰任何图和音频** —— 回顾历史只需要书名，
+ * 把那天的素材整包解析出来纯属浪费（一天可能十几 MB）。
+ */
+export const loadDaySummary = async (date: string) => {
+  const [raw, stars, done, prog] = await Promise.all([
+    loadPackMeta(date),
+    loadStars(date),
+    get<boolean>(`done:${date}`),
+    loadProgress(date),
+  ])
+  return {
+    date,
+    done: !!done,
+    books: (raw?.manifest.pieces ?? []).map((p) => ({
+      id: p.id,
+      title: p.title,
+      pages: p.pages.length,
+      stars: stars[p.id] ?? 0,
+      finished: isPieceDone(prog[p.id] ?? emptyProgress(), p),
+    })),
+  }
 }
 
 // ---- 进度 ----

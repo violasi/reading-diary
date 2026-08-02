@@ -50,10 +50,30 @@ export default function Read({
   // 绘本可以不录音就完成，变身屏别硬说「录音已经交给爸爸妈妈」
   const [gaveRec, setGaveRec] = useState(false)
 
+  /**
+   * 「回去再跟读」。孩子到了录音关常常发现自己还是读不出来，得能退回去练。
+   *
+   * 刻意**不动已有进度**：不把 pagesRead 清零，所以练完随时能回来录，
+   * 不用把整本重新点一遍。练习时页码自己管（practiceIdx），
+   * 和正式关 2 那个由 pagesRead 推出来的页码互不干扰。
+   */
+  const [practicing, setPracticing] = useState(false)
+  const [practiceIdx, setPracticeIdx] = useState(0)
+
   // 第二关停在还没读完的那一页
   const readIdx = Math.min(progress.pagesRead, piece.pages.length - 1)
+  // 关 2 当前看哪一页：练习模式下自己翻，正式跟读时停在还没读完的那一页
+  const followIdx = practicing ? practiceIdx : readIdx
   const shownIdx =
-    mode === 'browse' ? turnIdx : stage === 1 ? listenIdx : stage === 3 ? turnIdx : readIdx
+    practicing
+      ? followIdx
+      : mode === 'browse'
+        ? turnIdx
+        : stage === 1
+          ? listenIdx
+          : stage === 3
+            ? turnIdx
+            : readIdx
   const shownPage = piece.pages[shownIdx]
 
   /**
@@ -173,14 +193,21 @@ export default function Read({
 
   // ---- 第二关：听这一页 ----
   const [pagePlaying, setPagePlaying] = useState(false)
-  const playThisPage = () => {
+
+  const playThisPage = (idx = followIdx) => {
     setPagePlaying(true)
-    playPage(readIdx, () => setPagePlaying(false))
+    playPage(idx, () => setPagePlaying(false))
   }
 
   const finishThisPage = () => {
     stopAll()
     setPagePlaying(false)
+    if (practicing) {
+      // 练习：只是翻到下一页，翻到底就自动结束练习回到录音
+      if (practiceIdx >= piece.pages.length - 1) setPracticing(false)
+      else setPracticeIdx((i) => i + 1)
+      return
+    }
     onProgress({ pagesRead: progress.pagesRead + 1 })
   }
 
@@ -197,11 +224,35 @@ export default function Read({
     !gaveRec && (rec.state === 'recording' || (rec.state === 'done' && !!rec.blob))
 
   // 底部区块：显式布尔，比嵌三元好读
-  const showListen = mode === 'listen' && stage === 1
-  const showFollow = mode === 'listen' && stage === 2
-  const showBrowse = mode === 'browse' && stage === 1
-  const showRecord = mode === 'browse' ? stage === 2 : stage === 3
+  const showListen = mode === 'listen' && stage === 1 && !practicing
+  // 练习模式借用关 2 的界面（听这页 + 我读好了）
+  const showFollow = mode === 'listen' && (stage === 2 || practicing)
+  const showBrowse = mode === 'browse' && stage === 1 && !practicing
+  const showRecord = (mode === 'browse' ? stage === 2 : stage === 3) && !practicing
   const lastPage = piece.pages.length - 1
+
+  /**
+   * 关 2 翻到新的一页就自动念一遍 —— 孩子本来要先点一下「听这页」才出声，
+   * 多这一步既是负担，也容易让他干等着不知道要干嘛。
+   *
+   * 用 ref 记住「上一次自动念的是哪一页」来去重：不然每次重渲染都会重新触发，
+   * 把孩子自己点的「听这页」打断。「听这页」按钮保留，用来反复听。
+   *
+   * 自动播放不会被浏览器拦：进关 2 和翻页都是孩子点出来的，
+   * 页面已经有用户手势激活。
+   */
+  const autoPlayedRef = useRef<number | null>(null)
+  useEffect(() => {
+    if (!showFollow) {
+      autoPlayedRef.current = null
+      return
+    }
+    if (autoPlayedRef.current === followIdx) return
+    autoPlayedRef.current = followIdx
+    playThisPage(followIdx)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showFollow, followIdx])
+
 
   // 翻页统一走这里：箭头和滑动共用，边界自己夹住
   const turnTo = (i: number) => setTurnIdx(Math.max(0, Math.min(lastPage, i)))
@@ -338,7 +389,7 @@ export default function Read({
           <>
             <div className="flex gap-2.5">
               <button
-                onClick={playThisPage}
+                onClick={() => playThisPage()}
                 className="tap flex flex-1 items-center justify-center gap-2 rounded-2xl bg-[#f1ece3] py-3.5 text-[15px] font-bold text-[#6f665a] active:bg-[#e7e0d4]"
               >
                 <Play className="h-4 w-4" />
@@ -351,7 +402,25 @@ export default function Read({
                 我读好了 →
               </button>
             </div>
-            <FishTank total={piece.pages.length} filled={progress.pagesRead} />
+            {practicing ? (
+              <div className="mt-2 flex items-center justify-between">
+                <span className="text-[11.5px] text-mute">
+                  再练一练 · 第 {practiceIdx + 1} / {piece.pages.length} 页
+                </span>
+                <button
+                  onClick={() => {
+                    stopAll()
+                    setPagePlaying(false)
+                    setPracticing(false)
+                  }}
+                  className="tap rounded-xl bg-ultra/10 px-3 py-1.5 text-[12.5px] font-bold text-ultra"
+                >
+                  练好了，去录音 →
+                </button>
+              </div>
+            ) : (
+              <FishTank total={piece.pages.length} filled={progress.pagesRead} />
+            )}
           </>
         )}
 
@@ -377,6 +446,21 @@ export default function Read({
               </p>
             )}
           </>
+        )}
+
+        {/* 到了录音关才发现读不出来是常事，给一条退路。
+            练习不动已有进度，所以练完能直接回来录，不用整本重点一遍 */}
+        {showRecord && mode === 'listen' && rec.state === 'idle' && !gaveRec && (
+          <button
+            onClick={() => {
+              stopAll()
+              setPracticeIdx(0)
+              setPracticing(true)
+            }}
+            className="tap mb-2 w-full rounded-xl bg-[#f1ece3] py-2.5 text-[13px] font-bold text-[#6f665a] active:bg-[#e7e0d4]"
+          >
+            还不太会读？回去再跟读几遍
+          </button>
         )}
 
         {showRecord && (

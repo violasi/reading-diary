@@ -213,12 +213,7 @@ export default function App() {
 
   if (view.name === 'me')
     return (
-      <Me
-        date={date}
-        manifest={pack?.manifest ?? null}
-        doneDates={doneDates}
-        onExit={home}
-      />
+      <Me date={date} doneDates={doneDates} onExit={home} />
     )
 
   if (view.name === 'shelf')
