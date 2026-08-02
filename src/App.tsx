@@ -3,6 +3,7 @@ import type { DayProgress } from './types'
 import { emptyProgress, isPieceDone } from './types'
 import {
   migrate,
+  setMigrationStatus,
   loadDoneDates,
   markDayDone,
   loadPack,
@@ -40,8 +41,16 @@ export default function App() {
 
   // 首次加载：今天的任务包 + 进度 + 全部打卡日
   const reload = useCallback(async () => {
-    // 升级后第一次打开可能要迁移数据，必须在读之前跑完
-    await migrate()
+    // 升级后第一次打开可能要迁移数据。但迁移只是「省空间」的优化 ——
+    // 读取层同时认新旧两种格式，所以它失败绝不能挡住启动。
+    // 早先没有这个 try/catch：迁移一抛异常 ready 就永远不置 true，
+    // App 卡在「载入中」，连家长页都进不去清理，彻底锁死。
+    try {
+      const r = await migrate()
+      setMigrationStatus({ failed: r.failed, steps: r.steps })
+    } catch {
+      setMigrationStatus({ failed: ['*'], steps: ['迁移没跑起来'] })
+    }
     const [p, prog, done] = await Promise.all([
       loadPack(date),
       loadProgress(date),

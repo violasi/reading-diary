@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { PackManifest } from '../types'
 import {
   cleanupGradedRecordings,
+  getMigrationStatus,
   recordingsFootprint,
   clearAllProgress,
   clearDay,
@@ -271,6 +272,14 @@ function ParentPanel({
       </header>
 
       <main className="flex-1 space-y-2.5 overflow-y-auto p-3">
+        {/* 迁移是「尽力而为」，失败不挡启动 —— 但必须让家长看得到，
+            否则空间没省下来、也没人知道为什么 */}
+        {!!getMigrationStatus()?.failed.length && (
+          <p className="rounded-xl bg-sun/15 p-2.5 text-[12px] text-[#7a5b12]">
+            有 {getMigrationStatus()!.failed.length} 个任务包没能整理成省空间的格式
+            （常见原因是平板存储空间不足）。App 照常能用，腾出空间后下次打开会自动重试。
+          </p>
+        )}
         {!manifest && <p className="py-8 text-center text-sm text-mute">今天还没有任务包</p>}
 
         {manifest?.pieces.map((p) => {

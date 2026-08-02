@@ -48,10 +48,10 @@ export const todayStr = (d = new Date()) =>
  */
 const SCHEMA_VERSION = 2
 
-export async function migrate(): Promise<{ from: number; to: number; steps: string[] }> {
+export async function migrate(): Promise<{ from: number; to: number; steps: string[]; failed: string[] }> {
   const from = (await get<number>('schemaVersion')) ?? 0
   const steps: string[] = []
-  if (from === SCHEMA_VERSION) return { from, to: SCHEMA_VERSION, steps }
+  if (from === SCHEMA_VERSION) return { from, to: SCHEMA_VERSION, steps, failed: [] }
 
   // from < 1：browsed 是后加的字段，但 loadProgress 会补默认值，不必改写数据。
   // 这一版只是把基线版本号落下来，供以后的迁移判断。
@@ -63,21 +63,40 @@ export async function migrate(): Promise<{ from: number; to: number; steps: stri
   // 被释放，所以峰值只比原来多占一个包（十几 MB），不会翻倍。
   // 中途被杀也不怕：已转的是新格式、没转的还是老格式，而 resolveFiles
   // 两种都认，下次打开接着转。
+  const failed: string[] = []
   if (from < 2) {
     let moved = 0
     for (const date of await listPackDates()) {
-      const raw = await get<RawPack>(`pack:${date}`)
-      if (!raw) continue
-      const blobPaths = Object.keys(raw.files).filter((k) => typeof raw.files[k] !== 'string')
-      if (!blobPaths.length) continue // 这个包已经是新格式了
-      await savePack({ manifest: raw.manifest, files: (await resolveFiles(raw.files)) })
-      moved++
+      // 逐包容错：一个坏包（配额不足、WebCrypto 不可用、记录损坏）不能连累其他包，
+      // 更不能把整个启动流程带崩 —— 读取层本来就兼容两种格式，迁移是可选的
+      try {
+        const raw = await get<RawPack>(`pack:${date}`)
+        if (!raw) continue
+        const blobPaths = Object.keys(raw.files).filter((k) => typeof raw.files[k] !== 'string')
+        if (!blobPaths.length) continue // 这个包已经是新格式了
+        await savePack({ manifest: raw.manifest, files: await resolveFiles(raw.files) })
+        moved++
+      } catch {
+        failed.push(date)
+      }
     }
-    steps.push(`v2 任务包转为按内容寻址（处理 ${moved} 个包）`)
+    steps.push(`v2 任务包转为按内容寻址（成功 ${moved} 个${failed.length ? `，失败 ${failed.length} 个` : ''}）`)
   }
 
-  await set('schemaVersion', SCHEMA_VERSION)
-  return { from, to: SCHEMA_VERSION, steps }
+  // 有失败就不升版本号，下次打开自动重试。已转好的包会被跳过，所以重试很便宜；
+  // 硬盘腾出空间后自己就能好，不需要人工干预
+  if (!failed.length) await set('schemaVersion', SCHEMA_VERSION)
+  return { from, to: SCHEMA_VERSION, steps, failed }
+}
+
+/**
+ * 最近一次迁移的结果。启动时迁移是「尽力而为」，失败也要让 App 起来，
+ * 所以把结果记在内存里给家长页看 —— 不写库，因为写库可能正是失败的原因。
+ */
+let lastMigration: { failed: string[]; steps: string[] } | null = null
+export const getMigrationStatus = () => lastMigration
+export const setMigrationStatus = (v: { failed: string[]; steps: string[] }) => {
+  lastMigration = v
 }
 
 /** 存储占用明细，家长页展示用 */
@@ -154,11 +173,14 @@ export const savePack = async (pack: StoredPack) => {
     manifest: pack.manifest,
     files: Object.fromEntries(paths.map((p, i) => [p, hashes[i]])),
   }
-  await set(`pack:${date}`, raw)
-
+  // pack 记录和 dates 索引必须一个事务写完：分两次写的话中间被杀会留下
+  // 「包在库里但不在索引里」的状态
   const all = new Set(await listPackDates())
   all.add(date)
-  await set('dates', [...all].sort())
+  await setMany([
+    [`pack:${date}`, raw],
+    ['dates', [...all].sort()],
+  ])
 
   // 同日期重新导入会顶掉旧包，旧包独有的 blob 就没人引用了
   await gcBlobs()
@@ -192,9 +214,13 @@ export const deletePack = async (date: string) => {
 export const gcBlobs = async (): Promise<{ removed: number }> => {
   const ks = (await keys()).filter((k): k is string => typeof k === 'string')
   const referenced = new Set<string>()
-  for (const date of await listPackDates()) {
-    const raw = await loadPackMeta(date)
-    if (!raw) continue
+  // 引用源是**库里实际存在的 pack: 记录**，不是 dates 索引。索引要是漂了
+  // （历史遗留、或写索引前被杀），按索引统计就会漏掉一个真包，
+  // 进而把它的素材当孤儿删掉 —— 那本书就静默变成空白页了
+  for (const k of ks) {
+    if (!k.startsWith('pack:')) continue
+    const raw = await get<RawPack>(k)
+    if (!raw?.files) continue
     for (const v of Object.values(raw.files)) {
       if (typeof v === 'string') referenced.add(blobKey(v))
     }
