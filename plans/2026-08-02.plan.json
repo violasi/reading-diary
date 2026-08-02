@@ -11,7 +11,16 @@
       "source": "Bird Goes Home.pdf（Learning A-Z，Written by Cheryl Ryan，Illustrated by Signe Nordin）",
       "source_dir": "build/bird-goes-home",
       "cover_page": 1,
-      "pages": [3, 4, 5, 6, 7, 8, 9, 10]
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
     },
     {
       "id": "p2",
@@ -21,7 +30,16 @@
       "source": "Carlos Count Kittens.pdf（Learning A-Z，Written by Lorena F. Di Bello，Illustrated by Angela Kamstra-Jacobson）",
       "source_dir": "build/carlos-count-kittens",
       "cover_page": 1,
-      "pages": [3, 4, 5, 6, 7, 8, 9, 10]
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
     },
     {
       "id": "p3",
@@ -31,7 +49,45 @@
       "source": "Carlos Goes to School.pdf（Learning A-Z，Written by Lorena F. DiBello，Illustrated by Angela Kamstra-Jacobson）",
       "source_dir": "build/carlos-goes-to-school",
       "cover_page": 1,
-      "pages": [3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ]
+    },
+    {
+      "id": "p4",
+      "title": "牵牛花",
+      "lang": "zh-CN",
+      "level": "一粒种子的旅程",
+      "source": "牵牛花_绘本.pdf（[日]荒井真纪 著，黄锐 译，新星出版社；原作 ASAGAO，KIN-NO-HOSHI SHA 2011）",
+      "source_dir": "build/morning-glory",
+      "cover_page": 1,
+      "pages": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17
+      ]
     }
   ]
 }
