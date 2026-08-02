@@ -255,9 +255,22 @@ export default function Read({
 
 
   // 翻页统一走这里：箭头和滑动共用，边界自己夹住
-  const turnTo = (i: number) => setTurnIdx(Math.max(0, Math.min(lastPage, i)))
-  const canTurn = mode === 'browse' || stage === 3
-  const swipe = useSwipe(() => turnTo(turnIdx - 1), () => turnTo(turnIdx + 1))
+  /**
+   * 能自由翻页的三个场合：纯图绘本浏览、关 3 录音时边翻边读、以及练习模式。
+   *
+   * 练习模式下翻的必须是 practiceIdx，不能是 turnIdx —— 页面显示的是
+   * practiceIdx，要是箭头/滑动还在改 turnIdx，就会出现「页码角标变了、图没变」，
+   * 而且退出练习回到录音时会跳到被误改过的那一页。
+   * （练习时允许往回翻是有意的：孩子常想回上一页把某句多读几遍。）
+   */
+  const canTurn = practicing || mode === 'browse' || stage === 3
+  const activeIdx = practicing ? practiceIdx : turnIdx
+  const turnTo = (i: number) => {
+    const v = Math.max(0, Math.min(lastPage, i))
+    if (practicing) setPracticeIdx(v)
+    else setTurnIdx(v)
+  }
+  const swipe = useSwipe(() => turnTo(activeIdx - 1), () => turnTo(activeIdx + 1))
 
   const handleBack = () => {
     if (rec.state === 'recording' && !window.confirm('正在录音，真的要离开吗？')) return
@@ -329,16 +342,16 @@ export default function Read({
         )}
 
         {/* 孩子自己翻页：第三关边翻边读，纯图绘本全程都能翻 */}
-        {(mode === 'browse' || stage === 3) && (
+        {canTurn && (
           <>
-            <PageArrow side="left" disabled={turnIdx === 0} onClick={() => turnTo(turnIdx - 1)} />
+            <PageArrow side="left" disabled={activeIdx === 0} onClick={() => turnTo(activeIdx - 1)} />
             <PageArrow
               side="right"
-              disabled={turnIdx >= lastPage}
-              onClick={() => turnTo(turnIdx + 1)}
+              disabled={activeIdx >= lastPage}
+              onClick={() => turnTo(activeIdx + 1)}
             />
             <span className="absolute bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-black/45 px-2.5 py-0.5 text-[11px] font-bold text-white">
-              {turnIdx + 1} / {piece.pages.length}
+              {activeIdx + 1} / {piece.pages.length}
             </span>
           </>
         )}

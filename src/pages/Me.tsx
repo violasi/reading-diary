@@ -37,6 +37,9 @@ export default function Me({
   const { longest, total } = useMemo(() => streaks(doneDates), [doneDates])
   const cells = useMemo(() => monthCells(date), [date])
 
+  // 只认「和当前选中日期对得上」的那份数据
+  const fresh = day?.date === picked ? day : null
+
   return (
     <div className="flex h-full flex-col">
       <header className="flex items-start justify-between bg-linear-160 from-deep to-[#2e86b8] px-4 py-3 text-white">
@@ -96,13 +99,16 @@ export default function Me({
             </span>
           </h3>
 
-          {day === null && <p className="py-3 text-center text-[12px] text-mute">载入中…</p>}
-          {day && !day.books.length && (
+          {/* 必须比对 day.date === picked：只在 resolve 后 setDay 的话，
+              切日期的瞬间会把上一天的书单挂在新日期标题下面闪一下；
+              顺带也挡掉「先点 A 又点 B、A 的结果后回来」的乱序 */}
+          {fresh === null && <p className="py-3 text-center text-[12px] text-mute">载入中…</p>}
+          {fresh && !fresh.books.length && (
             <p className="py-3 text-center text-[12px] text-mute">
               {picked === date ? '今天还没有任务' : '这天没有布置任务'}
             </p>
           )}
-          {day?.books.map((b) => (
+          {fresh?.books.map((b) => (
             <div
               key={b.id}
               className="flex items-center justify-between border-t border-[#f4f0e8] py-2 text-[12px] first:border-0"
