@@ -2,7 +2,8 @@
  * 本地存储。全部在 IndexedDB，没有任何后端。
  *
  * 键的约定：
- *   pack:<date>       解包后的任务包 { manifest, files }
+ *   pack:<date>       任务包 { manifest, files: 路径 → blob 哈希 }
+ *   blob:<sha256>     按内容寻址的图/音频。同一本书连着几天布置，只存一份
  *   progress:<date>   当天各篇进度
  *   rec:<date>:<pid>  孩子交的录音 Blob
  *   stars:<date>      家长打的星
@@ -11,14 +12,25 @@
  *   schemaVersion     数据结构版本，升级时用来判断要不要迁移
  *   dates             有任务包的日期列表（升序），日历和图书馆都用
  */
-import { get, set, del, keys } from 'idb-keyval'
+import { get, set, del, keys, getMany, setMany, delMany } from 'idb-keyval'
 import type { DayProgress, PackManifest, PackPiece, Settings } from '../types'
 import { emptyProgress } from '../types'
 
 export interface StoredPack {
   manifest: PackManifest
-  /** 包内相对路径 → Blob */
+  /** 包内相对路径 → Blob（读出来时已解析好，调用方不需要关心底层怎么存） */
   files: Record<string, Blob>
+}
+
+/**
+ * 存在库里的样子：files 的值是 blob 哈希而不是 Blob 本身。
+ *
+ * v1 的老包这里直接存 Blob，所以两种值都要认（见 resolveFiles）—— 这是
+ * 迁移能中断、能重跑的关键：半迁移状态下 App 完全可用。
+ */
+interface RawPack {
+  manifest: PackManifest
+  files: Record<string, Blob | string>
 }
 
 export const todayStr = (d = new Date()) =>
@@ -34,7 +46,7 @@ export const todayStr = (d = new Date()) =>
  *   2. 真要改键的形状（比如 rec: 换命名、progress 拆表）时，在 migrate()
  *      里加一步并把版本号 +1，别直接改读取逻辑。
  */
-const SCHEMA_VERSION = 1
+const SCHEMA_VERSION = 2
 
 export async function migrate(): Promise<{ from: number; to: number; steps: string[] }> {
   const from = (await get<number>('schemaVersion')) ?? 0
@@ -45,26 +57,151 @@ export async function migrate(): Promise<{ from: number; to: number; steps: stri
   // 这一版只是把基线版本号落下来，供以后的迁移判断。
   if (from < 1) steps.push('v1 基线')
 
+  // v1 → v2：任务包里的 Blob 挪到按内容寻址的 blob: 键下，包只留哈希。
+  //
+  // 一天一个包地转，每转完一个就立刻写回 pack 记录 —— 旧的 Blob 副本随之
+  // 被释放，所以峰值只比原来多占一个包（十几 MB），不会翻倍。
+  // 中途被杀也不怕：已转的是新格式、没转的还是老格式，而 resolveFiles
+  // 两种都认，下次打开接着转。
+  if (from < 2) {
+    let moved = 0
+    for (const date of await listPackDates()) {
+      const raw = await get<RawPack>(`pack:${date}`)
+      if (!raw) continue
+      const blobPaths = Object.keys(raw.files).filter((k) => typeof raw.files[k] !== 'string')
+      if (!blobPaths.length) continue // 这个包已经是新格式了
+      await savePack({ manifest: raw.manifest, files: (await resolveFiles(raw.files)) })
+      moved++
+    }
+    steps.push(`v2 任务包转为按内容寻址（处理 ${moved} 个包）`)
+  }
+
   await set('schemaVersion', SCHEMA_VERSION)
   return { from, to: SCHEMA_VERSION, steps }
+}
+
+/** 存储占用明细，家长页展示用 */
+export const storageFootprint = async () => {
+  const ks = (await keys()).filter((k): k is string => typeof k === 'string')
+  let bookBytes = 0
+  let blobs = 0
+  for (const k of ks) {
+    if (!k.startsWith('blob:')) continue
+    const b = await get<Blob>(k)
+    if (!b) continue
+    bookBytes += b.size
+    blobs++
+  }
+  return { blobs, bookBytes, packs: (await listPackDates()).length }
+}
+
+// ---- 按内容寻址的 blob 存储 ----
+/**
+ * 同一本书常常连着好几天布置（亲子共读那本每天都带），一本 16 页的高清绘本
+ * 约 9 MB，按天各存一份的话一周就白占 50 MB，而且会一直长下去。
+ * 所以图和音频按内容哈希存一份，任务包只存引用。
+ */
+const blobKey = (hash: string) => `blob:${hash}`
+
+async function sha256(blob: Blob): Promise<string> {
+  const buf = await blob.arrayBuffer()
+  const d = await crypto.subtle.digest('SHA-256', buf)
+  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+/** 把存的形态（哈希 or 老包里的 Blob）解析成调用方要的 Blob */
+async function resolveFiles(files: Record<string, Blob | string>): Promise<Record<string, Blob>> {
+  const paths = Object.keys(files)
+  const hashPaths = paths.filter((p) => typeof files[p] === 'string')
+  const fetched = hashPaths.length
+    ? await getMany<Blob | undefined>(hashPaths.map((p) => blobKey(files[p] as string)))
+    : []
+
+  const out: Record<string, Blob> = {}
+  for (const path of paths) {
+    const v = files[path]
+    if (typeof v !== 'string') {
+      out[path] = v // v1 老包：直接就是 Blob
+      continue
+    }
+    const blob = fetched[hashPaths.indexOf(path)]
+    // 缺了就跳过这一项：阅读页对缺图有兜底（显示「这一页的图片丢了」），
+    // 总比整本打不开好
+    if (blob) out[path] = blob
+  }
+  return out
 }
 
 // ---- 任务包 ----
 export const savePack = async (pack: StoredPack) => {
   const date = pack.manifest.date
-  await set(`pack:${date}`, pack)
+
+  // 先算哈希、只写库里还没有的 blob，再写 pack 记录。
+  // 顺序很重要：pack 记录一旦落下，它引用的 blob 必须都已经在了
+  const paths = Object.keys(pack.files)
+  const hashes = await Promise.all(paths.map((p) => sha256(pack.files[p])))
+  const existing = await getMany<Blob | undefined>(hashes.map(blobKey))
+  const toWrite: [string, Blob][] = []
+  const seen = new Set<string>()
+  hashes.forEach((h, i) => {
+    if (existing[i] || seen.has(h)) return // 库里有了，或本包内重复
+    seen.add(h)
+    toWrite.push([blobKey(h), pack.files[paths[i]]])
+  })
+  if (toWrite.length) await setMany(toWrite)
+
+  const raw: RawPack = {
+    manifest: pack.manifest,
+    files: Object.fromEntries(paths.map((p, i) => [p, hashes[i]])),
+  }
+  await set(`pack:${date}`, raw)
+
   const all = new Set(await listPackDates())
   all.add(date)
   await set('dates', [...all].sort())
+
+  // 同日期重新导入会顶掉旧包，旧包独有的 blob 就没人引用了
+  await gcBlobs()
 }
 
-export const loadPack = (date: string) => get<StoredPack>(`pack:${date}`)
+export const loadPack = async (date: string): Promise<StoredPack | undefined> => {
+  const raw = await get<RawPack>(`pack:${date}`)
+  if (!raw) return undefined
+  return { manifest: raw.manifest, files: await resolveFiles(raw.files) }
+}
+
+/** 只要 manifest 和引用表，不读 blob 内容。书架列书用这个，快得多 */
+const loadPackMeta = (date: string) => get<RawPack>(`pack:${date}`)
 
 export const listPackDates = async () => (await get<string[]>('dates')) ?? []
 
+/**
+ * 删包只删 pack 记录，**绝不顺手删 blob** —— blob 是多天共享的，
+ * 误删会把别的天的图悄悄弄没。交给 gcBlobs 统一算引用。
+ */
 export const deletePack = async (date: string) => {
   await del(`pack:${date}`)
   await set('dates', (await listPackDates()).filter((d) => d !== date))
+  await gcBlobs()
+}
+
+/**
+ * 标记-清扫：重算「还被任何任务包引用」的 blob，只删没人引用的。
+ * 不读 blob 内容，只比键，所以很便宜。
+ */
+export const gcBlobs = async (): Promise<{ removed: number }> => {
+  const ks = (await keys()).filter((k): k is string => typeof k === 'string')
+  const referenced = new Set<string>()
+  for (const date of await listPackDates()) {
+    const raw = await loadPackMeta(date)
+    if (!raw) continue
+    for (const v of Object.values(raw.files)) {
+      if (typeof v === 'string') referenced.add(blobKey(v))
+    }
+  }
+  const orphans = ks.filter((k) => k.startsWith('blob:') && !referenced.has(k))
+  if (orphans.length) await delMany(orphans)
+  return { removed: orphans.length }
 }
 
 // ---- 进度 ----
@@ -198,18 +335,28 @@ export interface LibraryBook {
  */
 export const listLibrary = async (): Promise<LibraryBook[]> => {
   const byTitle = new Map<string, LibraryBook>()
+  // 先只读 manifest + 引用表（不含 blob 内容），把要哪些封面定下来
+  const wanted: { key: string; title: string }[] = []
   for (const date of await listPackDates()) {
     // listPackDates 是升序，所以后面的（更新的）会自然覆盖前面的同名书
-    const pack = await loadPack(date)
-    if (!pack) continue
-    for (const piece of pack.manifest.pieces) {
+    const raw = await loadPackMeta(date)
+    if (!raw) continue
+    for (const piece of raw.manifest.pieces) {
       const path = piece.cover ?? piece.pages[0]?.image
-      byTitle.set(piece.title.trim(), {
-        date,
-        piece,
-        cover: path ? pack.files[path] : undefined,
-      })
+      const ref = path ? raw.files[path] : undefined
+      byTitle.set(piece.title.trim(), { date, piece })
+      if (typeof ref === 'string') wanted.push({ key: `blob:${ref}`, title: piece.title.trim() })
+      else if (ref) byTitle.get(piece.title.trim())!.cover = ref // v1 老包
     }
+  }
+  // 只把封面这一张图读进来 —— 早先是整包解析，等于为了列书架把全部素材
+  // （近百 MB）都读一遍
+  if (wanted.length) {
+    const covers = await getMany<Blob | undefined>(wanted.map((w) => w.key))
+    wanted.forEach((w, i) => {
+      const book = byTitle.get(w.title)
+      if (book && covers[i]) book.cover = covers[i]
+    })
   }
   // Map.set 覆盖已有键时保留的是「初次插入」的位置，所以不能靠插入顺序，
   // 必须显式按日期倒排才能让最近读的排在前面

@@ -24,11 +24,14 @@ export function useSwipe(onPrev: () => void, onNext: () => void) {
   const onTouchStart = (e: TouchEvent) => {
     const t = e.touches[0]
     if (!t) return
-    const w = window.innerWidth
+    // 拿不到视口宽度时（某些情况下 innerWidth 会是 0）**放行**，
+    // 不要反过来把所有滑动都判成无效 —— 边缘死区只是为了不跟系统手势抢，
+    // 为它把翻页整个关掉是更糟的失败方向：孩子会发现书翻不动。
+    const w = window.innerWidth || document.documentElement.clientWidth || 0
     start.current = {
       x: t.clientX,
       y: t.clientY,
-      valid: t.clientX > EDGE_DEAD_ZONE && t.clientX < w - EDGE_DEAD_ZONE,
+      valid: w === 0 || (t.clientX > EDGE_DEAD_ZONE && t.clientX < w - EDGE_DEAD_ZONE),
     }
   }
 
