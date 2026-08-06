@@ -222,6 +222,10 @@ export default function Read({
             submitting={submitting}
             submitError={submitError}
             onPreview={playPreview}
+            onReset={() => {
+              stopPreview() // 不停的话孩子会一边听着旧录音一边开始重录
+              rec.reset()
+            }}
             onCancel={() => {
               stopPreview()
               rec.reset()
@@ -321,6 +325,7 @@ function RecordPanel({
   submitting,
   submitError,
   onPreview,
+  onReset,
   onCancel,
   onSubmit,
 }: {
@@ -328,6 +333,8 @@ function RecordPanel({
   submitting: boolean
   submitError: string | null
   onPreview: (b: Blob) => void
+  /** 重录：必须连试听一起停掉 */
+  onReset: () => void
   onCancel: () => void
   onSubmit: () => void
 }) {
@@ -373,7 +380,7 @@ function RecordPanel({
           </button>
           <div className="mt-2.5 flex gap-2.5">
             <button
-              onClick={rec.reset}
+              onClick={onReset}
               className="tap flex-1 rounded-2xl bg-[#f1ece3] py-3.5 text-[15px] font-bold text-[#6f665a]"
             >
               重录

@@ -271,7 +271,13 @@ export const loadProgress = async (date: string): Promise<DayProgress> => {
   const out: DayProgress = {}
   for (const [id, p] of Object.entries(raw)) {
     const merged = { ...emptyProgress(), ...p }
+    // 关卡时代的记录没有 finished，那时的「读完」= 交了录音 / 浏览完了
     if (p.finished === undefined) merged.finished = !!(p.recorded || p.browsed)
+    // 交了录音就算读完 —— 这一条**无条件**补，不能只在 finished 缺失时补。
+    // 中间有一版（取消关卡但录音还不算读完）已经写下了显式的 finished: false，
+    // 那版交过的录音会留下 { recorded: true, finished: false }，
+    // 只看 undefined 的话这些书升级后仍显示没读完。
+    if (merged.recorded) merged.finished = true
     out[id] = merged
   }
   return out
@@ -289,12 +295,30 @@ export const saveProgress = (date: string, p: DayProgress) => set(`progress:${da
  */
 export const markDayDone = (date: string) => set(`done:${date}`, true)
 
+/**
+ * 哪几天有章。两个来源取并集：
+ *   1. done:<date> 键 —— 当天读完时写下的
+ *   2. 扫 progress:<date>，只要有任一本 finished 就算
+ *
+ * 第 2 条不是冗余：盖章规则从「全部读完」放宽到「至少读完一本」之前，
+ * 那些「只读完一两本」的日子根本没写过 done: 键。光读键的话，改版后这些
+ * 历史日期在日历和连续天数里仍然是漏的。扫 progress 也比依赖 pack 稳 ——
+ * 万一哪天的包被换掉了，孩子读过的事实还在 progress 里。
+ */
 export const loadDoneDates = async () => {
-  const out: string[] = []
-  for (const k of await keys()) {
-    if (typeof k === 'string' && k.startsWith('done:')) out.push(k.slice('done:'.length))
+  const ks = (await keys()).filter((k): k is string => typeof k === 'string')
+  const out = new Set<string>()
+  for (const k of ks) {
+    if (k.startsWith('done:')) out.add(k.slice('done:'.length))
   }
-  return out.sort()
+  for (const k of ks) {
+    if (!k.startsWith('progress:')) continue
+    const date = k.slice('progress:'.length)
+    if (out.has(date)) continue
+    const prog = await loadProgress(date) // 走 loadProgress，才能吃到上面那些兼容推导
+    if (Object.values(prog).some(isPieceDone)) out.add(date)
+  }
+  return [...out].sort()
 }
 
 // ---- 录音 ----
