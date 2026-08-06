@@ -7,7 +7,8 @@
  *   progress:<date>   当天各篇进度
  *   rec:<date>:<pid>  孩子交的录音 Blob
  *   stars:<date>      家长打的星
- *   done:<date>       当天全部篇目都读完了 —— 真正的「打卡章」
+ *   done:<date>       当天至少读完一本 —— 打卡章。注意日历不只看这个键，
+ *                     loadDoneDates 还会扫 progress: 取并集（见那里的说明）
  *   settings          PIN、孩子名字
  *   schemaVersion     数据结构版本，升级时用来判断要不要迁移
  *   dates             有任务包的日期列表（升序），日历和图书馆都用

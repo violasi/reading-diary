@@ -32,11 +32,22 @@ export interface Settings {
   childName: string
 }
 
-/** 一天的进度。key 是 piece.id */
+/**
+ * 一天的进度。key 是 piece.id
+ *
+ * 完成有**两条路**，都算读完：孩子点「读完了」，或者交了录音（录音本身就是
+ * 「我读给爸爸妈妈听」）。`finished` 是归一化之后的完成状态 —— 判断读完只看它，
+ * 别在界面里自己拼 `finished || recorded`。
+ *
+ * 归一化发生在两处，改动时两处都要顾：
+ *   · 提交录音：App.tsx 的 onSubmitRecording 一并写 finished
+ *   · 读取：db.ts 的 loadProgress 对 recorded 无条件补 finished
+ *     （老版本留下过 { recorded: true, finished: false }，光靠提交路径补不回来）
+ */
 export interface PieceProgress {
-  /** 孩子自己点了「读完了」。这是**唯一**的完成判据 */
+  /** 归一化后的完成状态。两条路都会把它置 true */
   finished: boolean
-  /** 交过录音（录音是完全可选的，不影响完成） */
+  /** 交过录音。录音是可选的，但**交了就算读完** */
   recorded: boolean
 
   // ---- 以下是关卡时代留下的字段。不再驱动任何界面，只为了让老记录
@@ -66,5 +77,8 @@ export const emptyProgress = (): PieceProgress => ({
   browsed: false,
 })
 
-/** 读完 = 孩子点过「读完了」。录音与否、听没听过，都不影响 */
+/**
+ * 读完 = finished。两条路（点「读完了」/ 交录音）都已在写入和读取时归一化到
+ * 这个字段，所以这里只看它一个 —— 听没听过、听了几遍都不影响。
+ */
 export const isPieceDone = (p: PieceProgress) => p.finished
