@@ -50,6 +50,9 @@ export default function Read({
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [celebrate, setCelebrate] = useState(false)
+  // 交完录音的变身孩子很喜欢，所以录音这条路也要有。用本地状态记一下是不是
+  // 刚交的录音 —— progress.recorded 要等父组件回传，变身屏当场读不到
+  const [justGaveRec, setJustGaveRec] = useState(false)
 
   const rec = useRecorder()
   const player = useBookPlayer()
@@ -158,7 +161,9 @@ export default function Read({
         <HeroImg className="h-40 w-40 animate-pulse object-contain drop-shadow-[0_0_30px_rgba(255,138,138,.85)]" />
         <h2 className="text-xl font-extrabold">《{piece.title}》读完啦！</h2>
         <p className="text-[13px] opacity-90">
-          {progress.recorded ? '录音也交给爸爸妈妈了' : '想读给爸爸妈妈听的话，随时可以录一段'}
+          {justGaveRec || progress.recorded
+            ? '录音已经交给爸爸妈妈'
+            : '想读给爸爸妈妈听的话，随时可以录一段'}
         </p>
         <button
           onClick={onExit}
@@ -230,6 +235,9 @@ export default function Read({
                 stopPreview()
                 rec.reset()
                 setRecOpen(false)
+                // 交了录音就算读完这本，并且给变身 —— 这是孩子最喜欢的那一下
+                setJustGaveRec(true)
+                setCelebrate(true)
               } catch {
                 // 存不进去最常见的原因是空间满了。blob 还在内存里，所以不清 rec ——
                 // 让孩子能原地再点一次，不用重读一遍

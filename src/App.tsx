@@ -242,7 +242,9 @@ export default function App() {
           onProgress={(patch) => void updateProgress(piece.id, patch)}
           onSubmitRecording={async (blob) => {
             await saveRecording(date, piece.id, blob)
-            await updateProgress(piece.id, { recorded: true })
+            // 交了录音就算读完 —— 孩子已经读给爸爸妈妈听了，
+            // 再要求他额外点一下「读完了」没有意义
+            await updateProgress(piece.id, { recorded: true, finished: true })
           }}
           onExit={home}
         />
