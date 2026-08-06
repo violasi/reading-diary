@@ -251,17 +251,29 @@ export const loadDaySummary = async (date: string) => {
       title: p.title,
       pages: p.pages.length,
       stars: stars[p.id] ?? 0,
-      finished: isPieceDone(prog[p.id] ?? emptyProgress(), p),
+      finished: isPieceDone(prog[p.id] ?? emptyProgress()),
+      recorded: !!(prog[p.id] ?? emptyProgress()).recorded,
     })),
   }
 }
 
 // ---- 进度 ----
-/** 读出来一律补齐字段，这样以后加新字段不会把老记录读成 undefined */
+/**
+ * 读出来一律补齐字段，这样以后加新字段不会把老记录读成 undefined。
+ *
+ * finished 是取消关卡后才有的字段。关卡时代的记录没有它，但那时的「读完」
+ * 等价于「交了录音」（有声书）或「浏览完了」（纯图绘本）—— 在这里推导出来，
+ * 老日子的日历和星星就不会因为改版而回退。不写迁移：推导比改写数据安全，
+ * 而且孩子点过一次「读完了」之后就会存下真正的 finished。
+ */
 export const loadProgress = async (date: string): Promise<DayProgress> => {
   const raw = (await get<Record<string, Partial<DayProgress[string]>>>(`progress:${date}`)) ?? {}
   const out: DayProgress = {}
-  for (const [id, p] of Object.entries(raw)) out[id] = { ...emptyProgress(), ...p }
+  for (const [id, p] of Object.entries(raw)) {
+    const merged = { ...emptyProgress(), ...p }
+    if (p.finished === undefined) merged.finished = !!(p.recorded || p.browsed)
+    out[id] = merged
+  }
   return out
 }
 
@@ -269,8 +281,11 @@ export const saveProgress = (date: string, p: DayProgress) => set(`progress:${da
 
 // ---- 打卡章 ----
 /**
- * 「读了哪几天」以这个为准：当天所有书都读完了才盖。光是点进来翻两下
- * 不算，否则连续天数虚高，章就不值钱了。
+ * 「读了哪几天」以这个为准。
+ *
+ * 判据是**当天至少有一本书读完**，不要求全部读完 —— 一天布置三四本，孩子只读了
+ * 两本也是读了，日历上那天就该有章。具体读完哪几本在「我的」页的星星区标出来，
+ * 章负责「这天有没有读」，星星区负责「读了哪些」。
  */
 export const markDayDone = (date: string) => set(`done:${date}`, true)
 

@@ -185,7 +185,7 @@ export default function App() {
       // 打卡章集中在这里判，不挂在某个按钮上 —— 纯图绘本的录音是可选的，
       // 孩子可能根本不点录音，那条路上也得能盖章
       const pieces = packRef.current?.manifest.pieces
-      if (pieces?.length && pieces.every((x) => isPieceDone(next[x.id] ?? emptyProgress(), x))) {
+      if (pieces?.length && pieces.some((x) => isPieceDone(next[x.id] ?? emptyProgress()))) {
         await markDayDone(date)
         setDoneDates((d) => (d.includes(date) ? d : [...d, date]))
       }

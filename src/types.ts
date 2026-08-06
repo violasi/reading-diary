@@ -27,68 +27,44 @@ export interface PackManifest {
   pieces: PackPiece[]
 }
 
-/** 一天的进度。key 是 piece.id */
-export interface PieceProgress {
-  /** 第一关：完整听过一遍（有音频的书） */
-  listened: boolean
-  /** 第二关：已跟读完的页数 */
-  pagesRead: number
-  /** 第三关 / 第二步：已录音并交给家长 */
-  recorded: boolean
-  /** 无音频的书：自由浏览过一遍 */
-  browsed: boolean
-}
-
-/**
- * 两种书两条流程：
- *   listen —— 有真人音或有 text（能 TTS）：听一遍 → 跟读 → 录音（三关）
- *   browse —— 纯图的亲子阅读绘本：自由浏览 → 录音（可选）（两步）
- *
- * 从内容里推导而不是读 manifest 字段，这样老任务包也能正确处理。
- */
-export type PieceMode = 'listen' | 'browse'
-
-export const modeOf = (piece: PackPiece): PieceMode =>
-  piece.pages.some((p) => p.audio || p.text) ? 'listen' : 'browse'
-
-export type DayProgress = Record<string, PieceProgress>
-
-/** 当天陪读的奥特曼，首次进入时锁定 */
-export interface DayCompanion {
-  heroId: string
-  lockedAt: number
-}
-
 export interface Settings {
   pin: string
   childName: string
 }
 
+/** 一天的进度。key 是 piece.id */
+export interface PieceProgress {
+  /** 孩子自己点了「读完了」。这是**唯一**的完成判据 */
+  finished: boolean
+  /** 交过录音（录音是完全可选的，不影响完成） */
+  recorded: boolean
+
+  // ---- 以下是关卡时代留下的字段。不再驱动任何界面，只为了让老记录
+  // ---- 能推导出 finished（见 db.ts 的 loadProgress），别再往里写新逻辑
+  /** @deprecated 关卡时代：完整听过一遍 */
+  listened: boolean
+  /** @deprecated 关卡时代：已跟读完的页数 */
+  pagesRead: number
+  /** @deprecated 关卡时代：纯图绘本浏览过一遍 */
+  browsed: boolean
+}
+
+/**
+ * 这本书有没有可播的东西（真人音或能 TTS 的 text）。
+ *
+ * 只决定「要不要给听的按钮」，不再决定流程 —— 有音频没音频都是自由阅读。
+ */
+export const canPlay = (piece: PackPiece) => piece.pages.some((p) => p.audio || p.text)
+
+export type DayProgress = Record<string, PieceProgress>
+
 export const emptyProgress = (): PieceProgress => ({
+  finished: false,
+  recorded: false,
   listened: false,
   pagesRead: 0,
-  recorded: false,
   browsed: false,
 })
 
-/** 关卡序号。listen 的书有 1~3，browse 的书只有 1~2 */
-export type Stage = 1 | 2 | 3
-
-export function stageOf(p: PieceProgress, piece: PackPiece): Stage {
-  if (modeOf(piece) === 'browse') return p.browsed ? 2 : 1
-  if (!p.listened) return 1
-  if (p.pagesRead < piece.pages.length) return 2
-  return 3
-}
-
-/** 一共几关。首页的进度点要按这个画 */
-export const stageCount = (piece: PackPiece) => (modeOf(piece) === 'browse' ? 2 : 3)
-
-/**
- * 这本读完了没。
- * browse 的书录音是可选的，浏览完就算读完 —— 亲子阅读本来就是大人念、
- * 孩子听，不该拿录音当门槛卡着不给盖章。
- */
-export function isPieceDone(p: PieceProgress, piece: PackPiece): boolean {
-  return modeOf(piece) === 'browse' ? p.browsed : p.recorded
-}
+/** 读完 = 孩子点过「读完了」。录音与否、听没听过，都不影响 */
+export const isPieceDone = (p: PieceProgress) => p.finished

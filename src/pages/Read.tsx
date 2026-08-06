@@ -1,9 +1,25 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import type { PackPiece, PieceProgress, Stage } from '../types'
-import { modeOf, stageOf } from '../types'
+/**
+ * 阅读页。**没有关卡** —— 进书就是自由翻页，听、录、读完了都是随时可用的动作。
+ *
+ * 早先是三关闯关（听一遍 → 逐页跟读 → 整篇录音），孩子必须按顺序过。实际用下来
+ * 问题很明显：读得好的书被迫走完三关，读不动的书卡在录音关退不回去，而"听"
+ * 这件事本来就该由孩子自己决定什么时候要。所以改成自由模式：
+ *
+ *   翻页      左右滑动（箭头是辅助）
+ *   听这页    自己不会读的时候点一下
+ *   连着听    从当前页一路念到最后，自动翻页
+ *   录一段    随时可录，完全可选，不影响完成
+ *   读完了    孩子说读完就算读完 —— 这是唯一的完成判据
+ *
+ * 读完之后这本书**不锁**：还能从今日任务进来随便翻，方便复习。
+ */
+import { useEffect, useRef, useState } from 'react'
+import type { PackPiece, PieceProgress } from '../types'
+import { canPlay } from '../types'
 import HeroImg from '../components/HeroImg'
-import { Bolt, Butterfly, Fish, Play } from '../components/Icons'
+import { Play } from '../components/Icons'
 import { useRecorder } from '../lib/recorder'
+import { useBookPlayer } from '../lib/audio'
 import { setBackGuard } from '../lib/back'
 import { useSwipe } from '../lib/swipe'
 
@@ -26,69 +42,56 @@ export default function Read({
   onSubmitRecording,
   onExit,
 }: Props) {
-  // 第一关按顺序播全篇时，显示的是正在播的那一页
-  const [listenIdx, setListenIdx] = useState(0)
-  const [playing, setPlaying] = useState(false)
-  const [justCaught, setJustCaught] = useState(false)
-
-  // listened 一置 true，stageOf 就会跳到第二关。但设计要求听完先停在
-  // 「再听一遍 / 去跟读」那一屏，所以用这个本地状态把第一关按住，
-  // 直到孩子自己点「去跟读」。
-  const [holdStage1, setHoldStage1] = useState(false)
-  const mode = modeOf(piece)
-  const stage: Stage = holdStage1 ? 1 : stageOf(progress, piece)
-
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-  if (!audioRef.current) audioRef.current = new Audio()
-
-  // 孩子自己翻页时看的那一页：第三关边翻边读用，纯图绘本的自由浏览也用
-  const [turnIdx, setTurnIdx] = useState(0)
-  const rec = useRecorder()
+  const [idx, setIdx] = useState(0)
+  /** 'none' | 'page'（只念这页）| 'book'（连着念下去） */
+  const [playMode, setPlayMode] = useState<'none' | 'page' | 'book'>('none')
+  /** 录音面板是展开的吗。录音是可选动作，不占着主界面 */
+  const [recOpen, setRecOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
-  const [transformed, setTransformed] = useState(false)
-  // 绘本可以不录音就完成，变身屏别硬说「录音已经交给爸爸妈妈」
-  const [gaveRec, setGaveRec] = useState(false)
+  const [celebrate, setCelebrate] = useState(false)
 
-  /**
-   * 「回去再跟读」。孩子到了录音关常常发现自己还是读不出来，得能退回去练。
-   *
-   * 刻意**不动已有进度**：不把 pagesRead 清零，所以练完随时能回来录，
-   * 不用把整本重新点一遍。练习时页码自己管（practiceIdx），
-   * 和正式关 2 那个由 pagesRead 推出来的页码互不干扰。
-   */
-  const [practicing, setPracticing] = useState(false)
-  const [practiceIdx, setPracticeIdx] = useState(0)
+  const rec = useRecorder()
+  const player = useBookPlayer()
+  const hasAudio = canPlay(piece)
+  const last = piece.pages.length - 1
+  const page = piece.pages[idx]
 
-  // 第二关停在还没读完的那一页
-  const readIdx = Math.min(progress.pagesRead, piece.pages.length - 1)
-  // 关 2 当前看哪一页：练习模式下自己翻，正式跟读时停在还没读完的那一页
-  const followIdx = practicing ? practiceIdx : readIdx
-  const shownIdx =
-    practicing
-      ? followIdx
-      : mode === 'browse'
-        ? turnIdx
-        : stage === 1
-          ? listenIdx
-          : stage === 3
-            ? turnIdx
-            : readIdx
-  const shownPage = piece.pages[shownIdx]
+  const stopPlay = () => {
+    player.stop()
+    setPlayMode('none')
+  }
 
-  /**
-   * 播放代号。speechSynthesis.cancel() 之后被取消的那条 utterance 仍可能
-   * 触发 onend —— 第一关的 onDone 是「翻到下一页并继续播」，孩子点了停止
-   * 却还在自动翻页、还在记进度。换一个代号就让在飞的回调全部作废。
-   */
-  const genRef = useRef(0)
+  // ---- 翻页 ----
+  const turnTo = (i: number) => {
+    const v = Math.max(0, Math.min(last, i))
+    if (v === idx) return
+    stopPlay() // 翻页就停掉正在念的，不然上一页的声音压着新页
+    setIdx(v)
+  }
+  const swipe = useSwipe(() => turnTo(idx - 1), () => turnTo(idx + 1))
 
-  /**
-   * 试听刚录的那段。必须握在 ref 里 —— 之前是每次现造一个游离的 Audio，
-   * 谁都停不住它：孩子点了试听马上返回，那段录音会在首页继续响到播完。
-   */
+  // ---- 听 ----
+  const listenPage = () => {
+    if (playMode === 'page') return stopPlay()
+    stopPlay()
+    setPlayMode('page')
+    player.playPage(piece, urls, idx, () => setPlayMode('none'))
+  }
+
+  const listenOn = () => {
+    if (playMode === 'book') return stopPlay()
+    stopPlay()
+    setPlayMode('book')
+    // 连着听会自己翻页，所以 onPage 直接设页码 —— 不能走 turnTo，
+    // 那个会 stopPlay 把自己掐断
+    player.playFrom(piece, urls, idx, setIdx, () => setPlayMode('none'))
+  }
+
+  // ---- 试听刚录的那段 ----
+  // 必须握在 ref 里：早先每次现造一个游离的 Audio，谁都停不住它 ——
+  // 孩子点了试听马上返回，那段录音会在首页继续响到播完
   const previewRef = useRef<{ audio: HTMLAudioElement; url: string } | null>(null)
-
   const stopPreview = () => {
     const p = previewRef.current
     if (!p) return
@@ -98,7 +101,6 @@ export default function Read({
     p.audio.pause()
     URL.revokeObjectURL(p.url) // 不 revoke 的话每次试听漏一个
   }
-
   const playPreview = (blob: Blob) => {
     stopPreview() // 连点两次不要叠着放
     const url = URL.createObjectURL(blob)
@@ -108,169 +110,14 @@ export default function Read({
     audio.onerror = stopPreview
     void audio.play().catch(stopPreview)
   }
+  useEffect(() => stopPreview, [])
 
-  // 离开时一定要停掉音频和朗读，否则会在后台继续响
-  useEffect(() => {
-    const a = audioRef.current!
-    return () => {
-      // 卸载同样要作废回调：孩子在「听故事」时按实体返回键就走这条路，
-      // 而 a.src = '' 在部分浏览器本身会触发一次 error 事件 —— 不作废的话
-      // 那次 error 会把 step() 再往下推一页，人都走了还在记进度
-      genRef.current++
-      a.onended = null
-      a.onerror = null
-      a.pause()
-      a.src = ''
-      window.speechSynthesis?.cancel()
-      stopPreview()
-    }
-  }, [])
-
-  const speak = (text: string, onDone: () => void) => {
-    const synth = window.speechSynthesis
-    if (!synth) return onDone()
-    synth.cancel()
-    const gen = genRef.current
-    const guarded = () => {
-      if (gen === genRef.current) onDone()
-    }
-    const u = new SpeechSynthesisUtterance(text)
-    u.lang = piece.lang || 'en-US'
-    u.rate = 0.8
-    u.onend = guarded
-    u.onerror = guarded
-    synth.speak(u)
-  }
-
-  /** 播一页：有真人音就放，没有就用 TTS 念 text */
-  const playPage = (idx: number, onDone: () => void) => {
-    const page = piece.pages[idx]
-    if (!page) return onDone()
-    const a = audioRef.current!
-    const src = page.audio ? urls[page.audio] : undefined
-    const gen = genRef.current
-    const guarded = () => {
-      if (gen === genRef.current) onDone()
-    }
-    if (src) {
-      a.pause()
-      a.src = src
-      a.onended = guarded
-      a.onerror = guarded
-      void a.play().catch(guarded)
-    } else if (page.text) {
-      speak(page.text, onDone)
-    } else {
-      onDone()
-    }
-  }
-
-  const stopAll = () => {
-    genRef.current++ // 作废所有在飞的回调
-    audioRef.current!.pause()
-    window.speechSynthesis?.cancel()
-    stopPreview()
-    setPlaying(false)
-  }
-
-  // ---- 第一关：顺序播完全篇 ----
-  const startListen = () => {
-    setPlaying(true)
-    setJustCaught(false)
-    const step = (i: number) => {
-      if (i >= piece.pages.length) {
-        setPlaying(false)
-        setJustCaught(true)
-        setHoldStage1(true) // 停在「再听一遍 / 去跟读」这一屏
-        onProgress({ listened: true })
-        return
-      }
-      setListenIdx(i)
-      playPage(i, () => step(i + 1))
-    }
-    step(0)
-  }
-
-  // ---- 第二关：听这一页 ----
-  const [pagePlaying, setPagePlaying] = useState(false)
-
-  const playThisPage = (idx = followIdx) => {
-    setPagePlaying(true)
-    playPage(idx, () => setPagePlaying(false))
-  }
-
-  const finishThisPage = () => {
-    stopAll()
-    setPagePlaying(false)
-    if (practicing) {
-      // 练习：只是翻到下一页，翻到底就自动结束练习回到录音
-      if (practiceIdx >= piece.pages.length - 1) setPracticing(false)
-      else setPracticeIdx((i) => i + 1)
-      return
-    }
-    onProgress({ pagesRead: progress.pagesRead + 1 })
-  }
-
+  // ---- 离开 ----
   /**
-   * 有还没落盘的录音。两种情况都算：
-   *   - 正在录
-   *   - 录完了但还没点「交给爸爸妈妈」—— 这段 blob 只在组件内存里，
-   *     退出这一页就真的没了，孩子得从头再读一遍
-   *
-   * gaveRec 必须参与判断：交成功后 blob 仍留在内存里，不排掉的话
-   * 变身成功屏上按实体返回键会冤枉地弹「录音还没交」。
+   * 有还没落盘的录音：正在录，或录完了还没交（blob 只在内存里，退出就没了）。
+   * 已经交过的不算 —— 否则交完后按实体返回键会冤枉地弹「录音还没交」。
    */
-  const unsaved =
-    !gaveRec && (rec.state === 'recording' || (rec.state === 'done' && !!rec.blob))
-
-  // 底部区块：显式布尔，比嵌三元好读
-  const showListen = mode === 'listen' && stage === 1 && !practicing
-  // 练习模式借用关 2 的界面（听这页 + 我读好了）
-  const showFollow = mode === 'listen' && (stage === 2 || practicing)
-  const showBrowse = mode === 'browse' && stage === 1 && !practicing
-  const showRecord = (mode === 'browse' ? stage === 2 : stage === 3) && !practicing
-  const lastPage = piece.pages.length - 1
-
-  /**
-   * 关 2 翻到新的一页就自动念一遍 —— 孩子本来要先点一下「听这页」才出声，
-   * 多这一步既是负担，也容易让他干等着不知道要干嘛。
-   *
-   * 用 ref 记住「上一次自动念的是哪一页」来去重：不然每次重渲染都会重新触发，
-   * 把孩子自己点的「听这页」打断。「听这页」按钮保留，用来反复听。
-   *
-   * 自动播放不会被浏览器拦：进关 2 和翻页都是孩子点出来的，
-   * 页面已经有用户手势激活。
-   */
-  const autoPlayedRef = useRef<number | null>(null)
-  useEffect(() => {
-    if (!showFollow) {
-      autoPlayedRef.current = null
-      return
-    }
-    if (autoPlayedRef.current === followIdx) return
-    autoPlayedRef.current = followIdx
-    playThisPage(followIdx)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showFollow, followIdx])
-
-
-  // 翻页统一走这里：箭头和滑动共用，边界自己夹住
-  /**
-   * 能自由翻页的三个场合：纯图绘本浏览、关 3 录音时边翻边读、以及练习模式。
-   *
-   * 练习模式下翻的必须是 practiceIdx，不能是 turnIdx —— 页面显示的是
-   * practiceIdx，要是箭头/滑动还在改 turnIdx，就会出现「页码角标变了、图没变」，
-   * 而且退出练习回到录音时会跳到被误改过的那一页。
-   * （练习时允许往回翻是有意的：孩子常想回上一页把某句多读几遍。）
-   */
-  const canTurn = practicing || mode === 'browse' || stage === 3
-  const activeIdx = practicing ? practiceIdx : turnIdx
-  const turnTo = (i: number) => {
-    const v = Math.max(0, Math.min(lastPage, i))
-    if (practicing) setPracticeIdx(v)
-    else setTurnIdx(v)
-  }
-  const swipe = useSwipe(() => turnTo(activeIdx - 1), () => turnTo(activeIdx + 1))
+  const unsaved = rec.state === 'recording' || (rec.state === 'done' && !!rec.blob)
 
   const handleBack = () => {
     if (rec.state === 'recording' && !window.confirm('正在录音，真的要离开吗？')) return
@@ -280,7 +127,8 @@ export default function Read({
       !window.confirm('这段录音还没交给爸爸妈妈，离开就没有了。真的要走吗？')
     )
       return
-    stopAll()
+    stopPlay()
+    stopPreview()
     onExit()
   }
 
@@ -296,14 +144,21 @@ export default function Read({
     return () => setBackGuard(null)
   }, [unsaved])
 
-  // 交完录音 → 奥特曼变身。盖满全屏，否则底部操作条会露在浮层外面
-  if (transformed)
+  // ---- 读完了 ----
+  const finish = () => {
+    stopPlay()
+    onProgress({ finished: true })
+    setCelebrate(true)
+  }
+
+  // 庆祝屏盖满全屏，否则底部操作条会露在外面
+  if (celebrate)
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 bg-deep px-6 text-center text-white">
         <HeroImg className="h-40 w-40 animate-pulse object-contain drop-shadow-[0_0_30px_rgba(255,138,138,.85)]" />
         <h2 className="text-xl font-extrabold">《{piece.title}》读完啦！</h2>
         <p className="text-[13px] opacity-90">
-          {gaveRec ? '录音已经交给爸爸妈妈' : '今天的书看完啦'}
+          {progress.recorded ? '录音也交给爸爸妈妈了' : '想读给爸爸妈妈听的话，随时可以录一段'}
         </p>
         <button
           onClick={onExit}
@@ -316,330 +171,231 @@ export default function Read({
 
   return (
     <div className="flex h-full flex-col">
-      <StageBar stage={stage} total={mode === 'browse' ? 2 : 3} onBack={handleBack} />
+      <header className="flex items-center gap-2 border-b border-[#eee7dc] bg-white px-3 py-2.5">
+        <button
+          onClick={handleBack}
+          className="tap grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#f1ece3] text-lg text-[#6f665a]"
+          aria-label="返回"
+        >
+          ‹
+        </button>
+        <span className="truncate text-[13px] font-bold">{piece.title}</span>
+        {progress.finished && (
+          <span className="ml-auto shrink-0 rounded-full bg-[#3fae63]/12 px-2 py-0.5 text-[11px] font-bold text-[#3fae63]">
+            读完了 ✓
+          </span>
+        )}
+      </header>
 
       {/* 中部：整页原图。min-h-0 是关键 —— 否则 flex 子项按内容撑开，
           底部那行字会被裁掉，而那行字正是孩子要读的内容 */}
       <div
         className="relative flex min-h-0 flex-1 items-center justify-center p-2.5"
-        {...(canTurn ? swipe : {})}
+        {...swipe}
       >
-        {shownPage && urls[shownPage.image] ? (
+        {page && urls[page.image] ? (
           <img
-            src={urls[shownPage.image]}
+            src={urls[page.image]}
             alt=""
             className="max-h-full max-w-full rounded-lg object-contain shadow-md"
           />
         ) : (
           <p className="text-mute">这一页的图片丢了</p>
         )}
-        {showListen && (playing || justCaught) && (
-          <Butterfly
-            className={`absolute top-3 right-5 h-8 w-8 text-sun ${
-              playing ? 'animate-bounce' : ''
-            }`}
-          />
-        )}
 
-        {/* 孩子自己翻页：第三关边翻边读，纯图绘本全程都能翻 */}
-        {canTurn && (
-          <>
-            <PageArrow side="left" disabled={activeIdx === 0} onClick={() => turnTo(activeIdx - 1)} />
-            <PageArrow
-              side="right"
-              disabled={activeIdx >= lastPage}
-              onClick={() => turnTo(activeIdx + 1)}
-            />
-            <span className="absolute bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-black/45 px-2.5 py-0.5 text-[11px] font-bold text-white">
-              {activeIdx + 1} / {piece.pages.length}
-            </span>
-          </>
-        )}
-
+        <PageArrow side="left" disabled={idx === 0} onClick={() => turnTo(idx - 1)} />
+        <PageArrow side="right" disabled={idx >= last} onClick={() => turnTo(idx + 1)} />
+        <span className="absolute bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-black/45 px-2.5 py-0.5 text-[11px] font-bold text-white">
+          {idx + 1} / {piece.pages.length}
+        </span>
       </div>
 
-      {/* 底部：唯一随关卡变化的区域 */}
       <div className="border-t border-[#eee7dc] bg-white p-3">
-        {showListen && (
+        {recOpen ? (
+          <RecordPanel
+            rec={rec}
+            submitting={submitting}
+            submitError={submitError}
+            onPreview={playPreview}
+            onCancel={() => {
+              stopPreview()
+              rec.reset()
+              setRecOpen(false)
+            }}
+            onSubmit={async () => {
+              setSubmitting(true)
+              setSubmitError(null)
+              try {
+                await onSubmitRecording(rec.blob!)
+                stopPreview()
+                rec.reset()
+                setRecOpen(false)
+              } catch {
+                // 存不进去最常见的原因是空间满了。blob 还在内存里，所以不清 rec ——
+                // 让孩子能原地再点一次，不用重读一遍
+                setSubmitError('没交上，再试一次？')
+              } finally {
+                setSubmitting(false)
+              }
+            }}
+          />
+        ) : (
           <>
-            {playing ? (
-              <button onClick={stopAll} className="tap w-full rounded-2xl bg-sun/70 py-4 text-lg font-extrabold text-white">
-                正在听… 第 {listenIdx + 1} / {piece.pages.length} 页
-              </button>
-            ) : progress.listened ? (
-              <div className="flex gap-2.5">
-                <button
-                  onClick={startListen}
-                  className="tap flex-1 rounded-2xl bg-[#f1ece3] py-3.5 text-[15px] font-bold text-[#6f665a]"
-                >
-                  再听一遍
-                </button>
-                <button
-                  onClick={() => {
-                    stopAll()
-                    setHoldStage1(false)
-                  }}
-                  className="tap flex-1 rounded-2xl bg-water py-3.5 text-[15px] font-bold text-white"
-                >
-                  去跟读 →
-                </button>
-              </div>
-            ) : (
+            {/* 听和录都是「想用再用」的动作，压成一行小按钮；
+                「读完了」才是主按钮 */}
+            <div className="flex gap-2">
+              {hasAudio && (
+                <>
+                  <button
+                    onClick={listenPage}
+                    className={`tap flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-bold ${
+                      playMode === 'page'
+                        ? 'bg-water text-white'
+                        : 'bg-[#f1ece3] text-[#6f665a] active:bg-[#e7e0d4]'
+                    }`}
+                  >
+                    <Play className="h-3.5 w-3.5" />
+                    {playMode === 'page' ? '在念…' : '听这页'}
+                  </button>
+                  <button
+                    onClick={listenOn}
+                    className={`tap flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-bold ${
+                      playMode === 'book'
+                        ? 'bg-water text-white'
+                        : 'bg-[#f1ece3] text-[#6f665a] active:bg-[#e7e0d4]'
+                    }`}
+                  >
+                    <Play className="h-3.5 w-3.5" />
+                    {playMode === 'book' ? '连着念…' : '连着听'}
+                  </button>
+                </>
+              )}
               <button
-                onClick={startListen}
-                className="tap flex w-full items-center justify-center gap-2.5 rounded-2xl bg-sun py-4 text-xl font-extrabold text-white active:bg-sun/85"
+                onClick={() => setRecOpen(true)}
+                className={`tap flex items-center justify-center gap-1.5 rounded-xl bg-[#f1ece3] py-2.5 text-[13px] font-bold text-[#6f665a] active:bg-[#e7e0d4] ${
+                  hasAudio ? 'flex-1' : 'flex-1'
+                }`}
               >
-                <Play className="h-5 w-5" /> 听故事
+                <span className="text-ultra">●</span> 录一段
               </button>
-            )}
+            </div>
+
+            <button
+              onClick={finish}
+              className={`tap mt-2.5 w-full rounded-2xl py-4 font-extrabold text-white ${
+                progress.finished
+                  ? 'bg-[#9ec8ab] text-[15px]'
+                  : idx >= last
+                    ? 'bg-sun text-xl active:bg-sun/85'
+                    : 'bg-sun/80 text-lg active:bg-sun/85'
+              }`}
+            >
+              {progress.finished ? '再读一次也算读完啦 ✓' : '读完了 ✓'}
+            </button>
+
             <p className="mt-2 text-center text-[11.5px] text-mute">
-              {playing ? '播放中会自动翻页' : progress.listened ? '听过啦，可以去跟读了' : '先完整听一遍'}
+              {progress.finished
+                ? '这本已经算今天读过了，想再翻翻随时可以'
+                : hasAudio
+                  ? '左右滑动翻页 · 不会读就点「听这页」'
+                  : '左右滑动翻页 · 和爸爸妈妈一起看'}
             </p>
           </>
         )}
-
-        {showFollow && (
-          <>
-            <div className="flex gap-2.5">
-              <button
-                onClick={() => playThisPage()}
-                className="tap flex flex-1 items-center justify-center gap-2 rounded-2xl bg-[#f1ece3] py-3.5 text-[15px] font-bold text-[#6f665a] active:bg-[#e7e0d4]"
-              >
-                <Play className="h-4 w-4" />
-                {pagePlaying ? '在念…' : '听这页'}
-              </button>
-              <button
-                onClick={finishThisPage}
-                className="tap flex-1 rounded-2xl bg-water py-3.5 text-[15px] font-bold text-white active:bg-water/85"
-              >
-                我读好了 →
-              </button>
-            </div>
-            {practicing ? (
-              <div className="mt-2 flex items-center justify-between">
-                <span className="text-[11.5px] text-mute">
-                  再练一练 · 第 {practiceIdx + 1} / {piece.pages.length} 页
-                </span>
-                <button
-                  onClick={() => {
-                    stopAll()
-                    setPagePlaying(false)
-                    setPracticing(false)
-                  }}
-                  className="tap rounded-xl bg-ultra/10 px-3 py-1.5 text-[12.5px] font-bold text-ultra"
-                >
-                  练好了，去录音 →
-                </button>
-              </div>
-            ) : (
-              <FishTank total={piece.pages.length} filled={progress.pagesRead} />
-            )}
-          </>
-        )}
-
-        {/* 纯图绘本第一步：自由浏览。大人念、孩子翻。
-            「看完啦」只在最后一页出现 —— 实际用起来孩子会在翻页时误触它，
-            一按就跳去录音、这本书当场算看完了。放到末页等于用「翻到底」
-            代替确认，既防误触，也不用孩子瞄准任何小按钮。 */}
-        {showBrowse && (
-          <>
-            {turnIdx >= lastPage ? (
-              <button
-                onClick={() => onProgress({ browsed: true })}
-                className="tap w-full rounded-2xl bg-sun py-4 text-xl font-extrabold text-white active:bg-sun/85"
-              >
-                看完啦 →
-              </button>
-            ) : (
-              <p className="py-2 text-center text-[13px] font-bold text-[#6f665a]">
-                和爸爸妈妈一起看 · 左右滑动翻页
-                <span className="ml-1.5 font-normal text-mute">
-                  第 {turnIdx + 1} / {piece.pages.length} 页
-                </span>
-              </p>
-            )}
-          </>
-        )}
-
-        {/* 到了录音关才发现读不出来是常事，给一条退路。
-            练习不动已有进度，所以练完能直接回来录，不用整本重点一遍 */}
-        {showRecord && mode === 'listen' && rec.state === 'idle' && !gaveRec && (
-          <button
-            onClick={() => {
-              stopAll()
-              setPracticeIdx(0)
-              setPracticing(true)
-            }}
-            className="tap mb-2 w-full rounded-xl bg-[#f1ece3] py-2.5 text-[13px] font-bold text-[#6f665a] active:bg-[#e7e0d4]"
-          >
-            还不太会读？回去再跟读几遍
-          </button>
-        )}
-
-        {showRecord && (
-          <>
-            {rec.state === 'idle' && !rec.blob && (
-              <>
-                <button
-                  onClick={rec.start}
-                  className="tap flex w-full items-center justify-center gap-2.5 rounded-2xl bg-ultra py-4 text-xl font-extrabold text-white active:bg-ultra/85"
-                >
-                  <span className="text-2xl leading-none">●</span>
-                  {mode === 'browse' ? '录一段给爸爸妈妈' : '开始录音'}
-                </button>
-                {/* 绘本的录音是可选的：不想录也该有路走完，不然孩子卡在这一屏 */}
-                {mode === 'browse' && (
-                  <button
-                    onClick={() => setTransformed(true)}
-                    className="tap mt-2 w-full rounded-2xl bg-[#f1ece3] py-3 text-[14px] font-bold text-[#6f665a]"
-                  >
-                    不录了，今天读完啦 ✓
-                  </button>
-                )}
-              </>
-            )}
-
-            {rec.state === 'recording' && (
-              <>
-                <button
-                  onClick={rec.stop}
-                  className="tap flex w-full items-center justify-center gap-2.5 rounded-2xl bg-ultra py-4 text-xl font-extrabold text-white"
-                >
-                  <span className="text-lg leading-none">■</span> 读完了
-                  <span className="text-sm font-bold opacity-80">{fmt(rec.seconds)}</span>
-                </button>
-                <EnergyBar level={rec.level} />
-              </>
-            )}
-
-            {rec.state === 'done' && rec.blob && (
-              <>
-                <button
-                  onClick={() => playPreview(rec.blob!)}
-                  className="tap flex w-full items-center justify-center gap-2 rounded-2xl bg-[#f1ece3] py-3.5 text-[15px] font-bold text-[#6f665a] active:bg-[#e7e0d4]"
-                >
-                  <Play className="h-4 w-4" /> 听听我读的（{fmt(rec.seconds)}）
-                </button>
-                <div className="mt-2.5 flex gap-2.5">
-                  <button
-                    onClick={() => {
-                      stopPreview()
-                      rec.reset()
-                    }}
-                    className="tap flex-1 rounded-2xl bg-[#f1ece3] py-3.5 text-[15px] font-bold text-[#6f665a]"
-                  >
-                    重录
-                  </button>
-                  <button
-                    disabled={submitting}
-                    onClick={async () => {
-                      setSubmitting(true)
-                      setSubmitError(null)
-                      try {
-                        await onSubmitRecording(rec.blob!)
-                        setGaveRec(true)
-                        setTransformed(true)
-                      } catch {
-                        // 存不进去最常见的原因是存储空间满了。blob 还在内存里，
-                        // 所以不清 rec —— 让孩子能原地再点一次，不用重读一遍
-                        setSubmitError('没交上，再试一次？')
-                      } finally {
-                        setSubmitting(false)
-                      }
-                    }}
-                    className="tap flex-1 rounded-2xl bg-[#3fae63] py-3.5 text-[15px] font-bold text-white disabled:opacity-60"
-                  >
-                    {submitting ? '交给爸爸妈妈…' : '交给爸爸妈妈 ✓'}
-                  </button>
-                </div>
-              </>
-            )}
-
-            {(rec.error || submitError) && (
-              <p className="mt-2 rounded-xl bg-ultra/10 p-2 text-center text-[12.5px] text-ultra">
-                {rec.error || submitError}
-              </p>
-            )}
-            {!rec.error && (
-              <p className="mt-2 text-center text-[11.5px] text-mute">
-                {rec.state === 'recording'
-                  ? '点一次开始、点一次结束，不用一直按着'
-                  : rec.state === 'done'
-                    ? '满意就交给爸爸妈妈，不满意可以重录'
-                    : mode === 'browse'
-                      ? '想读给爸爸妈妈听就录一段，不想录也可以直接完成'
-                      : `翻着页把 ${piece.pages.length} 页完整读一遍`}
-              </p>
-            )}
-          </>
-        )}
       </div>
     </div>
   )
 }
 
-/**
- * 关卡进度。状态用显式判断，不要用 nth-of-type —— 返回箭头也是同类元素，
- * 会把序号顶掉一位。
- *
- * 纯图绘本只有两步（浏览 → 录音），画三个点会让孩子以为还差一关。
- */
-function StageBar({
-  stage,
-  total,
-  onBack,
+/** 录音面板。录音完全可选，所以它是展开出来的，不占主界面 */
+function RecordPanel({
+  rec,
+  submitting,
+  submitError,
+  onPreview,
+  onCancel,
+  onSubmit,
 }: {
-  stage: Stage
-  total: 2 | 3
-  onBack: () => void
+  rec: ReturnType<typeof useRecorder>
+  submitting: boolean
+  submitError: string | null
+  onPreview: (b: Blob) => void
+  onCancel: () => void
+  onSubmit: () => void
 }) {
-  const items = (
-    total === 2
-      ? [
-          { n: 1 as Stage, node: Butterfly, on: 'text-sun' },
-          { n: 2 as Stage, node: Bolt, on: 'text-ultra' },
-        ]
-      : [
-          { n: 1 as Stage, node: Butterfly, on: 'text-sun' },
-          { n: 2 as Stage, node: Fish, on: 'text-water' },
-          { n: 3 as Stage, node: Bolt, on: 'text-ultra' },
-        ]
-  )
   return (
-    <div className="flex items-center gap-2 bg-white px-3 py-2 shadow-sm">
-      <button onClick={onBack} className="tap -my-2 px-1 text-2xl leading-none text-[#b3aa9c]">
-        ‹
-      </button>
-      {items.map(({ n, node: Ico, on }, i) => (
-        <span key={n} className="flex flex-1 items-center gap-2 last:flex-none">
-          <Ico
-            className={
-              n === stage
-                ? `h-7 w-7 shrink-0 ${on}`
-                : n < stage
-                  ? 'h-5 w-5 shrink-0 text-[#9fd0a8]'
-                  : 'h-5 w-5 shrink-0 text-[#d3cbbf]'
-            }
-          />
-          {i < items.length - 1 && <i className="h-0.5 flex-1 rounded bg-[#e6e0d6]" />}
-        </span>
-      ))}
-    </div>
-  )
-}
+    <>
+      {rec.state === 'idle' && !rec.blob && (
+        <>
+          <button
+            onClick={rec.start}
+            className="tap flex w-full items-center justify-center gap-2.5 rounded-2xl bg-ultra py-4 text-xl font-extrabold text-white active:bg-ultra/85"
+          >
+            <span className="text-2xl leading-none">●</span> 开始录音
+          </button>
+          <button
+            onClick={onCancel}
+            className="tap mt-2 w-full rounded-2xl bg-[#f1ece3] py-3 text-[14px] font-bold text-[#6f665a]"
+          >
+            不录了
+          </button>
+        </>
+      )}
 
-/** 能量槽随音量涨落，让孩子知道麦克风真的在听 */
-function EnergyBar({ level }: { level: number }) {
-  return (
-    <div className="mt-2.5 flex items-center gap-2.5 rounded-xl bg-[#f1ece3] px-2.5 py-1.5">
-      <Bolt className="h-4 w-4 shrink-0 text-ultra" />
-      <div className="h-3.5 flex-1 overflow-hidden rounded-full bg-[#e0d8cb]">
-        <div
-          className="h-full rounded-full bg-linear-to-r from-sun to-ultra transition-[width] duration-100"
-          style={{ width: `${Math.max(4, level * 100)}%` }}
-        />
-      </div>
-    </div>
+      {rec.state === 'recording' && (
+        <>
+          <button
+            onClick={rec.stop}
+            className="tap flex w-full items-center justify-center gap-2.5 rounded-2xl bg-ultra py-4 text-xl font-extrabold text-white"
+          >
+            <span className="text-lg leading-none">■</span> 录好了
+            <span className="text-sm font-bold opacity-80">{fmt(rec.seconds)}</span>
+          </button>
+          <EnergyBar level={rec.level} />
+        </>
+      )}
+
+      {rec.state === 'done' && rec.blob && (
+        <>
+          <button
+            onClick={() => onPreview(rec.blob!)}
+            className="tap flex w-full items-center justify-center gap-2 rounded-2xl bg-[#f1ece3] py-3.5 text-[15px] font-bold text-[#6f665a] active:bg-[#e7e0d4]"
+          >
+            <Play className="h-4 w-4" /> 听听我读的（{fmt(rec.seconds)}）
+          </button>
+          <div className="mt-2.5 flex gap-2.5">
+            <button
+              onClick={rec.reset}
+              className="tap flex-1 rounded-2xl bg-[#f1ece3] py-3.5 text-[15px] font-bold text-[#6f665a]"
+            >
+              重录
+            </button>
+            <button
+              disabled={submitting}
+              onClick={onSubmit}
+              className="tap flex-1 rounded-2xl bg-[#3fae63] py-3.5 text-[15px] font-bold text-white disabled:opacity-60"
+            >
+              {submitting ? '交给爸爸妈妈…' : '交给爸爸妈妈 ✓'}
+            </button>
+          </div>
+        </>
+      )}
+
+      {(rec.error || submitError) && (
+        <p className="mt-2 rounded-xl bg-ultra/10 p-2 text-center text-[12.5px] text-ultra">
+          {rec.error || submitError}
+        </p>
+      )}
+      {!rec.error && !submitError && (
+        <p className="mt-2 text-center text-[11.5px] text-mute">
+          {rec.state === 'recording'
+            ? '点一次开始、点一次结束，不用一直按着'
+            : rec.state === 'done'
+              ? '满意就交给爸爸妈妈，不满意可以重录'
+              : '想读给爸爸妈妈听就录一段，不录也没关系'}
+        </p>
+      )}
+    </>
   )
 }
 
@@ -658,7 +414,7 @@ function PageArrow({
       disabled={disabled}
       aria-label={side === 'left' ? '上一页' : '下一页'}
       // 不能贴边：安卓 10+ 左右边缘各约 20~24dp 是系统返回手势区，
-      // 按钮压在那儿孩子一点就把阅读退出了。往里挪、并且做大一点好按。
+      // 按钮压在那儿孩子一点就把阅读退出了
       className={`tap absolute ${side === 'left' ? 'left-4' : 'right-4'} top-1/2 grid h-14 w-14 -translate-y-1/2 place-items-center rounded-full bg-black/30 text-3xl leading-none text-white active:bg-black/55 ${
         disabled ? 'opacity-0' : ''
       }`}
@@ -668,20 +424,14 @@ function PageArrow({
   )
 }
 
-function FishTank({ total, filled }: { total: number; filled: number }) {
-  const slots = useMemo(() => Array.from({ length: total }, (_, i) => i < filled), [total, filled])
+/** 录音时的实时音量条，给孩子「麦克风真的在听」的确认 */
+function EnergyBar({ level }: { level: number }) {
   return (
-    <div className="mt-2.5 flex justify-between gap-1 rounded-xl bg-[#dcf0f9] px-2 py-1.5">
-      {slots.map((on, i) => (
-        <span
-          key={i}
-          className={`grid aspect-square flex-1 place-items-center rounded-full ${
-            on ? 'bg-water text-white' : 'bg-[#c4e3f1]'
-          }`}
-        >
-          {on && <Fish className="h-3.5 w-3.5" />}
-        </span>
-      ))}
+    <div className="mt-2.5 h-2.5 overflow-hidden rounded-full bg-[#f1ece3]">
+      <div
+        className="h-full rounded-full bg-linear-to-r from-sun to-ultra transition-[width] duration-100"
+        style={{ width: `${Math.max(4, level * 100)}%` }}
+      />
     </div>
   )
 }

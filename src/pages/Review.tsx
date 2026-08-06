@@ -6,8 +6,8 @@
  */
 import { useState } from 'react'
 import type { PackPiece } from '../types'
-import { modeOf } from '../types'
-import { usePagePlayer } from '../lib/audio'
+import { canPlay } from '../types'
+import { useBookPlayer } from '../lib/audio'
 import { useSwipe } from '../lib/swipe'
 import { Play } from '../components/Icons'
 
@@ -22,12 +22,12 @@ export default function Review({
 }) {
   const [idx, setIdx] = useState(0)
   const [playing, setPlaying] = useState(false)
-  const { play, stop } = usePagePlayer(piece.lang || 'en-US')
+  const { playPage, stop } = useBookPlayer()
 
   const page = piece.pages[idx]
   const last = piece.pages.length - 1
   // 纯图绘本没有可播的东西，「听这页」按下去什么都不会发生 —— 不给这个按钮
-  const canListen = modeOf(piece) === 'listen'
+  const canListen = canPlay(piece)
 
   const go = (next: number) => {
     stop()
@@ -45,7 +45,7 @@ export default function Review({
       return setPlaying(false)
     }
     setPlaying(true)
-    play(page?.audio ? urls[page.audio] : undefined, page?.text, () => setPlaying(false))
+    playPage(piece, urls, idx, () => setPlaying(false))
   }
 
   return (

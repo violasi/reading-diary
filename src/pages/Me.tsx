@@ -114,10 +114,14 @@ export default function Me({
               key={b.id}
               className="flex items-center justify-between border-t border-[#f4f0e8] py-2 text-[12px] first:border-0"
             >
-              <span className="truncate pr-2">
-                {b.title}
-                {/* 没读完的书标出来，否则「没星」看着像家长忘了打分 */}
-                {!b.finished && <span className="ml-1 text-[10.5px] text-mute">未读完</span>}
+              <span className="flex min-w-0 items-center gap-1.5 pr-2">
+                {/* 一天布置多本、孩子只读了一两本是常态。日历那天照样有章，
+                    具体读完了哪几本靠这里的勾标出来 */}
+                <span className={b.finished ? 'text-[#3fae63]' : 'text-[#d5cec2]'}>
+                  {b.finished ? '✓' : '○'}
+                </span>
+                <span className="truncate">{b.title}</span>
+                {b.recorded && <span className="shrink-0 text-[10px] text-water">有录音</span>}
               </span>
               <span className="flex shrink-0 gap-0.5">
                 {[1, 2, 3, 4, 5].map((n) => (
