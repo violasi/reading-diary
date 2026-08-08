@@ -1,0 +1,84 @@
+{
+  "date": "2026-08-10",
+  "child": "",
+  "note": "素材为家庭自用读物，任务包仅在本机与孩子平板之间传递。",
+  "pieces": [
+    {
+      "id": "p1",
+      "title": "Such a Fuss",
+      "lang": "en-GB",
+      "level": "牛津树自然拼读 Stage 2",
+      "source": "2-03 such a fuss.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox-03-such-a-fuss",
+      "cover_page": 1,
+      "pages": [
+        2,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        20
+      ],
+      "book_audio": "2/2.03.Such a Fuss.mp3"
+    },
+    {
+      "id": "p2",
+      "title": "Less Mess",
+      "lang": "en-GB",
+      "level": "牛津树自然拼读 Stage 2",
+      "source": "2-04 less mess.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox-04-less-mess",
+      "cover_page": 1,
+      "pages": [
+        2,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        20
+      ],
+      "book_audio": "2/2.04.Less Mess.mp3"
+    },
+    {
+      "id": "p3",
+      "title": "My Dog",
+      "lang": "en-US",
+      "level": "RAZ Level A",
+      "source": "My Dog.pdf（Learning A-Z）",
+      "source_dir": "build/my-dog",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
+    }
+  ]
+}

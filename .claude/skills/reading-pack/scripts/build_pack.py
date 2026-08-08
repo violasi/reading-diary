@@ -49,24 +49,45 @@ def build_piece(piece: dict, stage: Path, warnings: list):
             entry["text"] = text
         out_pages.append(entry)
 
-    # 孩子端按「这篇能不能播」分两条流程：
-    #   有音频或有 text → 听一遍 → 跟读 → 录音（三关）
-    #   一点都没有      → 自由浏览 → 录音（可选）（两步，亲子阅读绘本走这条）
-    # 整本都没音频是正常形态，不该报警；有的页有、有的页没有才是漏了。
+    # 音频有两种形态，孩子端给的按钮不一样（见 App 的 src/types.ts）：
+    #   逐页音频（RAZ 那类，PDF 里每页一个 Sound 注释）→ 「听这页」「连着听」
+    #   整本音轨（plan 里写 book_audio）              → 「整本听」，翻页不打断
+    #   一点都没有                                     → 纯图，自由翻页
+    # 整本都没逐页音频是正常形态，不该报警；有的页有、有的页没有才是漏了。
     n_audio = sum(1 for e in out_pages if e["audio"])
     n_text = sum(1 for e in out_pages if e.get("text"))
     if n_audio and n_audio < len(out_pages):
         missing = [pno for pno, e in zip(piece["pages"], out_pages) if not e["audio"]]
         warnings.append(
             f"[{pid}] 只有部分页有音频，缺第 {missing} 页 —— "
-            f"孩子端第一关会跳过这些页，确认是故意的吗？"
+            f"孩子端「连着听」会跳过这些页，确认是故意的吗？"
         )
+
+    listen = {}
+    # book_audio：整本一条音轨，和页码对不上，原样搬进包里不切。
+    # 牛津树自然拼读就是这样 —— 一条 mp3 里混着拼读练习和故事、逐音停顿，
+    # 按静音切出来的段数是页数的三四倍，硬切只会切碎。
+    if piece.get("book_audio"):
+        src = Path(piece["book_audio"])
+        if not src.exists():
+            raise SystemExit(f"[{pid}] book_audio 找不到：{src}")
+        rel = f"audio/{pid}-book{src.suffix.lower()}"
+        (stage / "audio").mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, stage / rel)
+        listen = {"mode": "whole", "audio": rel}
+        if n_audio:
+            warnings.append(
+                f"[{pid}] 同时有逐页音频和整本音轨，孩子端会出 3 个听的按钮，"
+                f"确认是故意的吗？"
+            )
+    elif n_audio:
+        listen = {"mode": "sequence"}
 
     out = {
         "id": pid,
         "title": piece["title"],
         "lang": piece.get("lang", "zh-CN"),
-        "listen": {"mode": "sequence"},  # 第一关：依次播放各页音频，听一遍即可继续
+        "listen": listen,
         "pages": out_pages,
     }
     if piece.get("cover_page"):
@@ -121,12 +142,17 @@ def main():
     for p in pieces:
         n_audio = sum(1 for s in p["pages"] if s["audio"])
         n_text = sum(1 for s in p["pages"] if s.get("text"))
-        flow = ("自由浏览 → 录音（可选）" if not n_audio and not n_text
-                else "听一遍 → 跟读 → 录音")
-        src = (f"{n_audio} 页真人音" if n_audio
-               else f"{n_text} 页 TTS 文本" if n_text
-               else "纯图")
-        print(f"    {p['id']} {p['title']}｜{len(p['pages'])} 页｜{src}｜{flow}"
+        whole = (p.get("listen") or {}).get("audio")
+        if n_audio:
+            src, btn = f"{n_audio} 页真人音", "听这页 / 连着听"
+        elif n_text:
+            src, btn = f"{n_text} 页 TTS 文本", "听这页 / 连着听"
+        else:
+            src, btn = "纯图", "自由翻页"
+        if whole:
+            src += " ＋ 整本音轨"
+            btn = "整本听（边听边翻页）" if btn == "自由翻页" else f"{btn} / 整本听"
+        print(f"    {p['id']} {p['title']}｜{len(p['pages'])} 页｜{src}｜{btn}"
               f"{'｜含封面' if p.get('cover') else ''}")
     for w in warnings:
         print(f"  ⚠ {w}")

@@ -6,7 +6,7 @@
  */
 import { useState } from 'react'
 import type { PackPiece } from '../types'
-import { canPlay } from '../types'
+import { bookAudioOf, hasPageAudio } from '../types'
 import { useBookPlayer } from '../lib/audio'
 import { useSwipe } from '../lib/swipe'
 import { Play } from '../components/Icons'
@@ -21,17 +21,22 @@ export default function Review({
   onExit: () => void
 }) {
   const [idx, setIdx] = useState(0)
-  const [playing, setPlaying] = useState(false)
-  const { playPage, stop } = useBookPlayer()
+  /** 'none' | 'page'（只念这页）| 'whole'（整本一条音轨，不跟页码） */
+  const [playMode, setPlayMode] = useState<'none' | 'page' | 'whole'>('none')
+  const { playPage, playWhole, stop } = useBookPlayer()
 
   const page = piece.pages[idx]
   const last = piece.pages.length - 1
-  // 纯图绘本没有可播的东西，「听这页」按下去什么都不会发生 —— 不给这个按钮
-  const canListen = canPlay(piece)
+  // 纯图绘本没有可播的东西，按钮按下去什么都不会发生 —— 干脆不给
+  const pageAudio = hasPageAudio(piece)
+  const bookAudio = !!bookAudioOf(piece)
 
   const go = (next: number) => {
-    stop()
-    setPlaying(false)
+    // 和阅读页同一条规矩：整本音轨与页码无关，翻页不该把它掐断
+    if (playMode !== 'whole') {
+      stop()
+      setPlayMode('none')
+    }
     setIdx(Math.max(0, Math.min(last, next)))
   }
 
@@ -40,12 +45,23 @@ export default function Review({
   const swipe = useSwipe(() => go(idx - 1), () => go(idx + 1))
 
   const listen = () => {
-    if (playing) {
+    if (playMode === 'page') {
       stop()
-      return setPlaying(false)
+      return setPlayMode('none')
     }
-    setPlaying(true)
-    playPage(piece, urls, idx, () => setPlaying(false))
+    stop()
+    setPlayMode('page')
+    playPage(piece, urls, idx, () => setPlayMode('none'))
+  }
+
+  const listenWhole = () => {
+    if (playMode === 'whole') {
+      stop()
+      return setPlayMode('none')
+    }
+    stop()
+    setPlayMode('whole')
+    playWhole(piece, urls, () => setPlayMode('none'))
   }
 
   return (
@@ -87,17 +103,29 @@ export default function Review({
       </div>
 
       <div className="border-t border-[#eee7dc] bg-white p-3">
-        {canListen ? (
+        {pageAudio && (
           <button
             onClick={listen}
             className={`tap flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-lg font-extrabold text-white ${
-              playing ? 'bg-water/70' : 'bg-water'
+              playMode === 'page' ? 'bg-water/70' : 'bg-water'
             }`}
           >
             <Play className="h-5 w-5" />
-            {playing ? '正在念…' : '听这页'}
+            {playMode === 'page' ? '正在念…' : '听这页'}
           </button>
-        ) : (
+        )}
+        {bookAudio && (
+          <button
+            onClick={listenWhole}
+            className={`tap flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-lg font-extrabold text-white ${
+              playMode === 'whole' ? 'bg-water/70' : 'bg-water'
+            } ${pageAudio ? 'mt-2' : ''}`}
+          >
+            <Play className="h-5 w-5" />
+            {playMode === 'whole' ? '在放…（可以边听边翻页）' : '整本听'}
+          </button>
+        )}
+        {!pageAudio && !bookAudio && (
           <p className="py-1 text-center text-[12px] text-mute">
             左右翻页，和爸爸妈妈一起再看一遍（第 {idx + 1} / {piece.pages.length} 页）
           </p>

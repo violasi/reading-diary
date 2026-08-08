@@ -8,6 +8,7 @@
  */
 import { useEffect, useRef } from 'react'
 import type { PackPiece } from '../types'
+import { bookAudioOf } from '../types'
 
 export function useBookPlayer() {
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -115,5 +116,20 @@ export function useBookPlayer() {
     step(from)
   }
 
-  return { playPage, playFrom, stop }
+  /**
+   * 整本一条音轨：从头念到尾，**和页码完全无关**。
+   *
+   * 所以它不回调 onPage、调用方也不该在翻页时把它停掉 —— 孩子就是要
+   * 一边听一边自己翻页对照（牛津树那批书的音频里还夹着拼读练习，
+   * 根本对不上页）。没有这条音轨时直接 onDone，调用方不用先判一遍。
+   */
+  const playWhole = (piece: PackPiece, urls: Record<string, string>, onDone: () => void) => {
+    stop()
+    const rel = bookAudioOf(piece)
+    const src = rel ? urls[rel] : undefined
+    if (!src) return onDone()
+    speak(src, undefined, piece.lang || 'en-US', onDone)
+  }
+
+  return { playPage, playFrom, playWhole, stop }
 }

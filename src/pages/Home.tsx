@@ -1,5 +1,5 @@
 import type { DayProgress, PackPiece } from '../types'
-import { canPlay, emptyProgress, isPieceDone } from '../types'
+import { bookAudioOf, canPlay, emptyProgress, isPieceDone } from '../types'
 import { useBookPlayer } from '../lib/audio'
 import type { StoredPack } from '../lib/db'
 import { HERO_NAME } from '../data/heroes'
@@ -37,7 +37,8 @@ export default function Home({
    * 也不会用到上一次渲染留下的那本。
    */
   const player = useBookPlayer()
-  const [listening, setListening] = useState<{ id: string; idx: number } | null>(null)
+  /** idx 是「念到第几页了」；整本音轨的书对不上页码，所以是 null */
+  const [listening, setListening] = useState<{ id: string; idx: number | null } | null>(null)
 
   const toggleListen = (piece: (typeof pieces)[number]) => {
     if (listening?.id === piece.id) {
@@ -45,6 +46,12 @@ export default function Home({
       return setListening(null)
     }
     player.stop()
+    // 整本一条音轨的书（牛津树那类）直接放整条，没有页码可报
+    if (bookAudioOf(piece)) {
+      setListening({ id: piece.id, idx: null })
+      player.playWhole(piece, urls, () => setListening(null))
+      return
+    }
     setListening({ id: piece.id, idx: 0 })
     player.playFrom(
       piece,
@@ -101,6 +108,7 @@ export default function Home({
                 onOpenPiece(piece.id)
               }}
               onListen={() => toggleListen(piece)}
+              listening={listening?.id === piece.id}
               listeningIdx={listening?.id === piece.id ? listening.idx : null}
             />
           ))}
@@ -141,6 +149,7 @@ function BookCard({
   progress,
   onOpen,
   onListen,
+  listening,
   listeningIdx,
 }: {
   piece: PackPiece
@@ -149,7 +158,13 @@ function BookCard({
   onOpen: () => void
   /** 裸听：不进故事页，直接从首页把整本念下去 */
   onListen: () => void
-  /** 正在裸听这本时是第几页，没在听就是 null */
+  /**
+   * 正在裸听这本吗。**必须和 listeningIdx 分开** —— 整本音轨的书没有页码，
+   * idx 是 null，光看 idx 会把「正在听」误判成「没在听」，
+   * 按钮就退回耳机图标、孩子再点一下反而是重新开始放
+   */
+  listening: boolean
+  /** 听到第几页了。整本音轨的书对不上页码，是 null */
   listeningIdx: number | null
 }) {
   const done = isPieceDone(progress)
@@ -172,9 +187,11 @@ function BookCard({
             {piece.pages.length} 页
           </span>
           <span className="mt-1 block text-[11px] font-bold">
-            {listeningIdx !== null ? (
+            {listening ? (
               <span className="text-water">
-                正在听 · 第 {listeningIdx + 1} / {piece.pages.length} 页
+                {listeningIdx === null
+                  ? '正在听整本…'
+                  : `正在听 · 第 ${listeningIdx + 1} / ${piece.pages.length} 页`}
               </span>
             ) : done ? (
               <span className="text-[#3fae63]">
@@ -193,10 +210,10 @@ function BookCard({
           onClick={onListen}
           aria-label="裸听"
           className={`tap grid h-11 w-11 shrink-0 place-items-center rounded-full ${
-            listeningIdx !== null ? 'bg-water text-white' : 'bg-water/12 text-water active:bg-water/25'
+            listening ? 'bg-water text-white' : 'bg-water/12 text-water active:bg-water/25'
           }`}
         >
-          {listeningIdx !== null ? (
+          {listening ? (
             <span className="text-lg leading-none">■</span>
           ) : (
             <Headphones className="h-5 w-5" />

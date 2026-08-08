@@ -8,6 +8,14 @@
   · RichMedia 型（RAZ / Reading A-Z 等）—— 每页一个 /Subtype /Sound 注释，内含 mp3
   · 无音频型 —— 只出页面图，朗读交给 App 的 TTS（此时 plan 里需补 text）
 
+  · --split=spread —— 扫描版跨页专用（牛津树自然拼读那批）。这类 PDF 一页 = 一个
+    物理跨页 = **两个书页**并排（1485x1050 横版），四周还有大片白边。竖屏平板上
+    整张塞进去，每个书页只占半个屏宽，字小到读不了。
+    这个模式把每页按正中切成左右两半、各自裁掉白边、当成两页输出，
+    并自动丢掉空白的那半（末页常是「左空白 + 右一页」）。
+    页号规则：PDF 第 N 页 → 左半 2N-1、右半 2N（**不重排**，
+    这样 probe.json 的页号永远能反推回原 PDF 的哪一页哪半边）。
+
   · --layout=picturebook —— 亲子阅读绘本专用。有些绘本 PDF 是「一张高清跨页扫图
     ＋ 一段转录文字」拼在 A4 版面上，四周大片空白、还印着大号页码。整页缩放渲染
     会把高清插图压小、文字也跟着糊；更糟的是这类 PDF 常用子集化的 CJK 内嵌字体
@@ -24,6 +32,7 @@
 用法：
   uv run --with pymupdf python extract_pdf.py <input.pdf> <out_dir> [--width 900]
   uv run --with pymupdf python extract_pdf.py <绘本.pdf> <out_dir> --layout=picturebook --width=1400
+  uv run --with pymupdf python extract_pdf.py <跨页扫描.pdf> <out_dir> --split=spread --width=800
 """
 
 import json
@@ -41,6 +50,65 @@ AUDIO_EXTS = (".mp3", ".m4a", ".wav", ".mp4")
 PB_PAD = 40           # 四边留白（按输出宽度 1400 校的）
 PB_FONT_DIVISOR = 26  # 字号 = 输出宽度 / 这个数：1400 → 54px，孩子一臂距离看得清
 PB_LINE_HEIGHT = 1.5
+
+# --split=spread 的常数
+INK_SCALE = 0.14      # 找墨迹范围用的探测分辨率，够定位白边、又快
+INK_MAX = 246         # 亮过这个值算白纸（扫描件的白其实是 248~252，不是纯 255）
+INK_MIN_RATIO = 0.004 # 墨迹少于半边面积的 0.4% 就当空白页丢掉
+TRIM_PAD_PT = 6       # 裁白边时四周留一点，别把字母贴到边上
+
+
+def ink_bbox(page, clip, max_ink=INK_MAX):
+    """
+    在 clip 区域内找「有墨迹」的最小矩形，返回 PDF 坐标的 Rect；全白返回 None。
+
+    先用很低的分辨率渲一张探测图逐像素扫，再把像素坐标换回 PDF 坐标 ——
+    直接按目标分辨率渲一张来扫的话，一本书要扫掉上亿个像素。
+    """
+    pix = page.get_pixmap(matrix=fitz.Matrix(INK_SCALE, INK_SCALE), clip=clip, colorspace=fitz.csGRAY)
+    w, h, data = pix.width, pix.height, pix.samples
+    if not w or not h:
+        return None
+    x0, y0, x1, y1, ink = w, h, -1, -1, 0
+    for y in range(h):
+        row = data[y * pix.stride : y * pix.stride + w]
+        for x in range(w):
+            if row[x] <= max_ink:
+                ink += 1
+                if x < x0: x0 = x
+                if x > x1: x1 = x
+                if y < y0: y0 = y
+                if y > y1: y1 = y
+    if x1 < 0 or ink < w * h * INK_MIN_RATIO:
+        return None
+    # 像素 → PDF 坐标。+1 是因为 x1/y1 是「最后一个有墨的像素」，要包含它整格
+    sx, sy = clip.width / w, clip.height / h
+    r = fitz.Rect(
+        clip.x0 + x0 * sx - TRIM_PAD_PT,
+        clip.y0 + y0 * sy - TRIM_PAD_PT,
+        clip.x0 + (x1 + 1) * sx + TRIM_PAD_PT,
+        clip.y0 + (y1 + 1) * sy + TRIM_PAD_PT,
+    )
+    return r & clip  # 留白别越出这半边，否则会把邻页的字带进来
+
+
+def spread_halves(page, width: int):
+    """
+    把一个跨页切成左右两半，各自裁掉白边。
+
+    返回 [(半边序号 0/1, 裁好的 Rect, 渲染矩阵)]，空白的那半不返回。
+    """
+    r = page.rect
+    mid = (r.x0 + r.x1) / 2
+    out = []
+    for i, clip in enumerate((fitz.Rect(r.x0, r.y0, mid, r.y1),
+                              fitz.Rect(mid, r.y0, r.x1, r.y1))):
+        trimmed = ink_bbox(page, clip)
+        if trimmed is None or trimmed.is_empty:
+            continue
+        scale = width / trimmed.width
+        out.append((i, trimmed, fitz.Matrix(scale, scale)))
+    return out
 
 
 def render_picturebook_page(doc, page, out_path: Path, width: int) -> None:
@@ -190,17 +258,62 @@ def main():
         sys.exit(1)
     width = DEFAULT_WIDTH
     layout = "page"
+    split = "none"
     for a in sys.argv[1:]:
         if a.startswith("--width"):
             width = int(a.split("=", 1)[1]) if "=" in a else width
         elif a.startswith("--layout"):
             layout = a.split("=", 1)[1] if "=" in a else layout
+        elif a.startswith("--split"):
+            split = a.split("=", 1)[1] if "=" in a else "spread"
 
     pdf_path, out_dir = Path(args[0]), Path(args[1])
     (out_dir / "pages").mkdir(parents=True, exist_ok=True)
 
     doc = fitz.open(pdf_path)
     page_audio = resolve_page_audio(doc)
+
+    # 跨页切半：一页出两页，页号 2N-1 / 2N。这类扫描件没有内嵌音频
+    # （音频是单独一条整本 mp3，由 plan 的 book_audio 带进去），所以不查 page_audio。
+    if split == "spread":
+        pages, blanks = [], []
+        for pno, page in enumerate(doc, start=1):
+            halves = spread_halves(page, width)
+            for i in (0, 1):
+                out_pno = pno * 2 - 1 + i
+                hit = next((h for h in halves if h[0] == i), None)
+                if hit is None:
+                    blanks.append(out_pno)
+                    continue
+                _, clip, mat = hit
+                img_rel = f"pages/p{out_pno:02d}.jpg"
+                page.get_pixmap(matrix=mat, clip=clip).save(
+                    out_dir / img_rel, jpg_quality=80
+                )
+                pages.append({
+                    "page": out_pno,
+                    "image": img_rel,
+                    "audio": None,
+                    "audio_seconds": None,
+                    "from": f"PDF 第 {pno} 页{'左' if i == 0 else '右'}半",
+                })
+        probe = {
+            "source_pdf": pdf_path.name,
+            "page_count": len(pages),
+            "split": "spread",
+            "pdf_page_count": doc.page_count,
+            "pages": pages,
+        }
+        (out_dir / "probe.json").write_text(
+            json.dumps(probe, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        print(f"✓ {doc.page_count} 个跨页 → {len(pages)} 个单页"
+              f"（页号 {pages[0]['page']}…{pages[-1]['page']}）")
+        if blanks:
+            print(f"  · 空白半页已丢弃：{blanks}")
+        print(f"  ⚠ 这批书没有逐页音频，plan 里要用 book_audio 挂整本音轨")
+        print(f"  → {out_dir}/probe.json")
+        return
 
     pages = []
     for pno, page in enumerate(doc, start=1):

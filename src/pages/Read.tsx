@@ -6,10 +6,14 @@
  * 这件事本来就该由孩子自己决定什么时候要。所以改成自由模式：
  *
  *   翻页      左右滑动（箭头是辅助）
- *   听这页    自己不会读的时候点一下
- *   连着听    从当前页一路念到最后，自动翻页
+ *   听这页    自己不会读的时候点一下          ← 逐页音频的书
+ *   连着听    从当前页一路念到最后，自动翻页    ← 逐页音频的书
+ *   整本听    整本一条音轨从头放到尾            ← 整本音轨的书（牛津树那类）
  *   录一段    随时可录，不强制；但**交了录音就算读完这本**
  *   读完了    孩子说读完就算读完
+ *
+ * 「整本听」和前两个的区别是它**不跟页码走**，所以翻页不能把它停掉 ——
+ * 孩子要的就是一边听一边自己翻着对照（见 turnTo）。
  *
  * 完成有这两条路，都会写下 finished、都给变身（孩子最喜欢那一下）。
  *
@@ -17,7 +21,7 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import type { PackPiece, PieceProgress } from '../types'
-import { canPlay } from '../types'
+import { bookAudioOf, hasPageAudio } from '../types'
 import HeroImg from '../components/HeroImg'
 import { Play } from '../components/Icons'
 import { useRecorder } from '../lib/recorder'
@@ -45,8 +49,11 @@ export default function Read({
   onExit,
 }: Props) {
   const [idx, setIdx] = useState(0)
-  /** 'none' | 'page'（只念这页）| 'book'（连着念下去） */
-  const [playMode, setPlayMode] = useState<'none' | 'page' | 'book'>('none')
+  /**
+   * 'none' | 'page'（只念这页）| 'book'（连着念下去，自动翻页）
+   * | 'whole'（整本一条音轨，**不跟页码**）
+   */
+  const [playMode, setPlayMode] = useState<'none' | 'page' | 'book' | 'whole'>('none')
   /** 录音面板是展开的吗。录音是可选动作，不占着主界面 */
   const [recOpen, setRecOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -58,7 +65,8 @@ export default function Read({
 
   const rec = useRecorder()
   const player = useBookPlayer()
-  const hasAudio = canPlay(piece)
+  const pageAudio = hasPageAudio(piece)
+  const bookAudio = !!bookAudioOf(piece)
   const last = piece.pages.length - 1
   const page = piece.pages[idx]
 
@@ -71,7 +79,9 @@ export default function Read({
   const turnTo = (i: number) => {
     const v = Math.max(0, Math.min(last, i))
     if (v === idx) return
-    stopPlay() // 翻页就停掉正在念的，不然上一页的声音压着新页
+    // 「整本听」的音轨和页码无关，翻页得让它继续放 —— 孩子就是要边听边翻。
+    // 逐页音频反过来必须停：不停的话上一页的声音会压着新页。
+    if (playMode !== 'whole') stopPlay()
     setIdx(v)
   }
   const swipe = useSwipe(() => turnTo(idx - 1), () => turnTo(idx + 1))
@@ -91,6 +101,13 @@ export default function Read({
     // 连着听会自己翻页，所以 onPage 直接设页码 —— 不能走 turnTo，
     // 那个会 stopPlay 把自己掐断
     player.playFrom(piece, urls, idx, setIdx, () => setPlayMode('none'))
+  }
+
+  const listenWhole = () => {
+    if (playMode === 'whole') return stopPlay()
+    stopPlay()
+    setPlayMode('whole')
+    player.playWhole(piece, urls, () => setPlayMode('none'))
   }
 
   // ---- 试听刚录的那段 ----
@@ -256,9 +273,11 @@ export default function Read({
         ) : (
           <>
             {/* 听和录都是「想用再用」的动作，压成一行小按钮；
-                「读完了」才是主按钮 */}
-            <div className="flex gap-2">
-              {hasAudio && (
+                「读完了」才是主按钮。
+                一本书通常只有逐页音频或整本音轨其中一种，所以这行一般是
+                3 个按钮；万一两种都有也不会挤坏 —— flex-wrap 会折行 */}
+            <div className="flex flex-wrap gap-2">
+              {pageAudio && (
                 <>
                   <button
                     onClick={listenPage}
@@ -284,11 +303,22 @@ export default function Read({
                   </button>
                 </>
               )}
+              {bookAudio && (
+                <button
+                  onClick={listenWhole}
+                  className={`tap flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-bold ${
+                    playMode === 'whole'
+                      ? 'bg-water text-white'
+                      : 'bg-[#f1ece3] text-[#6f665a] active:bg-[#e7e0d4]'
+                  }`}
+                >
+                  <Play className="h-3.5 w-3.5" />
+                  {playMode === 'whole' ? '在放…' : '整本听'}
+                </button>
+              )}
               <button
                 onClick={() => setRecOpen(true)}
-                className={`tap flex items-center justify-center gap-1.5 rounded-xl bg-[#f1ece3] py-2.5 text-[13px] font-bold text-[#6f665a] active:bg-[#e7e0d4] ${
-                  hasAudio ? 'flex-1' : 'flex-1'
-                }`}
+                className="tap flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-[#f1ece3] py-2.5 text-[13px] font-bold text-[#6f665a] active:bg-[#e7e0d4]"
               >
                 <span className="text-ultra">●</span> 录一段
               </button>
@@ -308,11 +338,15 @@ export default function Read({
             </button>
 
             <p className="mt-2 text-center text-[11.5px] text-mute">
-              {progress.finished
-                ? '这本已经算今天读过了，想再翻翻随时可以'
-                : hasAudio
-                  ? '左右滑动翻页 · 不会读就点「听这页」'
-                  : '左右滑动翻页 · 和爸爸妈妈一起看'}
+              {playMode === 'whole'
+                ? '一边听一边自己翻页 · 翻页不会把音频停掉'
+                : progress.finished
+                  ? '这本已经算今天读过了，想再翻翻随时可以'
+                  : pageAudio
+                    ? '左右滑动翻页 · 不会读就点「听这页」'
+                    : bookAudio
+                      ? '点「整本听」，然后自己一页页翻着跟'
+                      : '左右滑动翻页 · 和爸爸妈妈一起看'}
             </p>
           </>
         )}

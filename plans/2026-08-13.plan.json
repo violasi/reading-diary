@@ -1,0 +1,84 @@
+{
+  "date": "2026-08-13",
+  "child": "",
+  "note": "素材为家庭自用读物，任务包仅在本机与孩子平板之间传递。",
+  "pieces": [
+    {
+      "id": "p1",
+      "title": "Bang the Gong",
+      "lang": "en-GB",
+      "level": "牛津树自然拼读 Stage 2",
+      "source": "2-09 bang the gong.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox-09-bang-the-gong",
+      "cover_page": 1,
+      "pages": [
+        2,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        20
+      ],
+      "book_audio": "2/2.09.Bang the Gong.mp3"
+    },
+    {
+      "id": "p2",
+      "title": "Jack",
+      "lang": "en-GB",
+      "level": "牛津树自然拼读 Stage 2",
+      "source": "2-10 Jack.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox-10-jack",
+      "cover_page": 1,
+      "pages": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+      ],
+      "book_audio": "2/2.10.Jack.mp3"
+    },
+    {
+      "id": "p3",
+      "title": "We Can Make Sounds",
+      "lang": "en-US",
+      "level": "RAZ Level A",
+      "source": "We Can Make Sounds.pdf（Learning A-Z）",
+      "source_dir": "build/we-can-make-sounds",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
+    }
+  ]
+}

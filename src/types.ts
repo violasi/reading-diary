@@ -11,7 +11,15 @@ export interface PackPiece {
   id: string
   title: string
   lang: string
-  listen: { mode?: 'sequence'; audio?: string | null }
+  /**
+   * 整本级别的音轨。`audio` 有值就是「这本书只有一条从头到尾的音频」，
+   * 和页码对不上（牛津树自然拼读就是这样：一条 2 分钟的 mp3 里混着
+   * 拼读练习和故事，逐音停顿，硬切成页只会切碎）。
+   *
+   * `mode` 是关卡时代留下的，App 不再看它 —— 判断有没有整本音轨只看
+   * `audio`（见 bookAudioOf）。
+   */
+  listen: { mode?: 'sequence' | 'whole'; audio?: string | null }
   pages: PackPage[]
   cover?: string
   level?: string
@@ -61,11 +69,26 @@ export interface PieceProgress {
 }
 
 /**
- * 这本书有没有可播的东西（真人音或能 TTS 的 text）。
+ * 音频有**两种形态**，给的按钮不一样，别混着判：
  *
- * 只决定「要不要给听的按钮」，不再决定流程 —— 有音频没音频都是自由阅读。
+ *   逐页音频（RAZ 那类）  每页一段 → 「听这页」「连着听」，播放跟着页码走
+ *   整本音轨（牛津树那类）整本一条 → 「整本听」，和页码无关，翻页不该打断它
+ *
+ * 一本书通常只有其中一种。用 hasPageAudio / bookAudioOf 分别判，
+ * canPlay 只回答「有没有任何能播的东西」（首页裸听按钮用它）。
  */
-export const canPlay = (piece: PackPiece) => piece.pages.some((p) => p.audio || p.text)
+
+/** 逐页可播（真人音或能 TTS 的 text）→ 决定给不给「听这页 / 连着听」 */
+export const hasPageAudio = (piece: PackPiece) => piece.pages.some((p) => p.audio || p.text)
+
+/** 整本一条音轨的文件路径，没有就是 null → 决定给不给「整本听」 */
+export const bookAudioOf = (piece: PackPiece) => piece.listen?.audio || null
+
+/**
+ * 有任何能播的东西。只决定「要不要给听的按钮」，不再决定流程 ——
+ * 有音频没音频都是自由阅读。
+ */
+export const canPlay = (piece: PackPiece) => !!bookAudioOf(piece) || hasPageAudio(piece)
 
 export type DayProgress = Record<string, PieceProgress>
 
