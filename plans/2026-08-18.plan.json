@@ -1,0 +1,84 @@
+{
+  "date": "2026-08-18",
+  "child": "",
+  "note": "素材为家庭自用读物，任务包仅在本机与孩子平板之间传递。",
+  "pieces": [
+    {
+      "id": "p1",
+      "title": "Rain Again",
+      "lang": "en-GB",
+      "level": "牛津树自然拼读 Stage 3",
+      "source": "3-03 rain again.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox3-03-rain-again",
+      "cover_page": 1,
+      "pages": [
+        18,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17
+      ],
+      "book_audio": "3/3.03.Rain Again.mp3"
+    },
+    {
+      "id": "p2",
+      "title": "Such a Fuss",
+      "lang": "en-GB",
+      "level": "牛津树自然拼读 Stage 2",
+      "source": "2-03 such a fuss.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox-03-such-a-fuss",
+      "cover_page": 1,
+      "pages": [
+        2,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        20
+      ],
+      "book_audio": "2/2.03.Such a Fuss.mp3"
+    },
+    {
+      "id": "p3",
+      "title": "He Runs",
+      "lang": "en-US",
+      "level": "RAZ Level A",
+      "source": "He Runs.pdf（Learning A-Z）",
+      "source_dir": "build/he-runs",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
+    }
+  ]
+}
