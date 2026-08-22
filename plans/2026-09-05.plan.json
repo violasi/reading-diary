@@ -1,0 +1,86 @@
+{
+  "date": "2026-09-05",
+  "child": "",
+  "note": "素材为家庭自用读物，任务包仅在本机与孩子平板之间传递。",
+  "pieces": [
+    {
+      "id": "p1",
+      "title": "The Moon Jet",
+      "lang": "en-GB",
+      "level": "牛津树自然拼读 Level 4",
+      "source": "3-01 The Moon Jet.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox3-01-the-moon-jet",
+      "cover_page": 1,
+      "pages": [
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21
+      ],
+      "book_audio": "3/3.01.The Moon Jet.mp3"
+    },
+    {
+      "id": "p2",
+      "title": "Posh Shops",
+      "lang": "en-GB",
+      "level": "牛津树自然拼读 Stage 2",
+      "source": "2-08 posh shop.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox-08-posh-shops",
+      "cover_page": 1,
+      "pages": [
+        2,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        20
+      ],
+      "book_audio": "2/2.08.Posh Shops.mp3"
+    },
+    {
+      "id": "p3",
+      "title": "I Love the Earth",
+      "lang": "en-US",
+      "level": "RAZ Level B",
+      "source": "I Love the Earth.pdf（Learning A-Z）",
+      "source_dir": "build/b-i-love-the-earth",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ]
+    }
+  ]
+}

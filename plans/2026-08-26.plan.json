@@ -1,0 +1,86 @@
+{
+  "date": "2026-08-26",
+  "child": "",
+  "note": "素材为家庭自用读物，任务包仅在本机与孩子平板之间传递。",
+  "pieces": [
+    {
+      "id": "p1",
+      "title": "A Bark in the Night",
+      "lang": "en-GB",
+      "level": "牛津树自然拼读 Stage 3",
+      "source": "3-11 A Bark in the Night.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox3-11-a-bark-in-the-night",
+      "cover_page": 1,
+      "pages": [
+        18,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17
+      ],
+      "book_audio": "3/3.11.A Bark in the Night.mp3"
+    },
+    {
+      "id": "p2",
+      "title": "Wet Feet",
+      "lang": "en-GB",
+      "level": "牛津树自然拼读 Stage 3",
+      "source": "3-02 wet feet.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox3-02-wet-feet",
+      "cover_page": 1,
+      "pages": [
+        18,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17
+      ],
+      "book_audio": "3/3.02.Wet Feet.mp3"
+    },
+    {
+      "id": "p3",
+      "title": "Animal Sounds",
+      "lang": "en-US",
+      "level": "RAZ Level B",
+      "source": "Animal Sounds.pdf（Learning A-Z）",
+      "source_dir": "build/b-animal-sounds",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ]
+    }
+  ]
+}

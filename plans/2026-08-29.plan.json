@@ -1,0 +1,82 @@
+{
+  "date": "2026-08-29",
+  "child": "",
+  "note": "素材为家庭自用读物，任务包仅在本机与孩子平板之间传递。",
+  "pieces": [
+    {
+      "id": "p1",
+      "title": "The Rook and the Ring",
+      "lang": "en-GB",
+      "level": "牛津树自然拼读 Stage 3",
+      "source": "3-06 the rock and the ring.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox3-06-the-rook-and-the-ring",
+      "cover_page": 1,
+      "pages": [
+        18,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17
+      ],
+      "book_audio": "3/3.06.The Rook and the Ring.mp3"
+    },
+    {
+      "id": "p2",
+      "title": "The Fizz-buzz",
+      "lang": "en-GB",
+      "level": "牛津树自然拼读 Stage 2",
+      "source": "2-01 fizz buzz.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox-01-the-fizz-buzz",
+      "cover_page": 1,
+      "pages": [
+        2,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        18
+      ],
+      "book_audio": "2/2.01.The Fizz-buzz.mp3"
+    },
+    {
+      "id": "p3",
+      "title": "Bananas Sometimes",
+      "lang": "en-US",
+      "level": "RAZ Level B",
+      "source": "Bananas Sometimes.pdf（Learning A-Z）",
+      "source_dir": "build/b-bananas-sometimes",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
+    }
+  ]
+}

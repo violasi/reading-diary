@@ -1,0 +1,83 @@
+{
+  "date": "2026-08-24",
+  "child": "",
+  "note": "素材为家庭自用读物，任务包仅在本机与孩子平板之间传递。",
+  "pieces": [
+    {
+      "id": "p1",
+      "title": "Toads in the Road",
+      "lang": "en-GB",
+      "level": "牛津树自然拼读 Stage 3",
+      "source": "3-09 Toads in the Road.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox3-09-toads-in-the-road",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19
+      ],
+      "book_audio": "3/3.09.Toads in the Road.mp3"
+    },
+    {
+      "id": "p2",
+      "title": "A Robin's Eggs",
+      "lang": "en-GB",
+      "level": "牛津树自然拼读 Stage 2",
+      "source": "2-12 A Robin's Eggs.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox-12-a-robins-eggs",
+      "cover_page": 1,
+      "pages": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17
+      ],
+      "book_audio": "2/2.12.A Robin's Eggs.mp3"
+    },
+    {
+      "id": "p3",
+      "title": "What Lives Here",
+      "lang": "en-US",
+      "level": "RAZ Level A",
+      "source": "What Lives Here.pdf（Learning A-Z）",
+      "source_dir": "build/what-lives-here",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
+    }
+  ]
+}

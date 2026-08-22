@@ -1,0 +1,84 @@
+{
+  "date": "2026-09-03",
+  "child": "",
+  "note": "素材为家庭自用读物，任务包仅在本机与孩子平板之间传递。",
+  "pieces": [
+    {
+      "id": "p1",
+      "title": "A Bark in the Night",
+      "lang": "en-GB",
+      "level": "牛津树自然拼读 Stage 3",
+      "source": "3-11 A Bark in the Night.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox3-11-a-bark-in-the-night",
+      "cover_page": 1,
+      "pages": [
+        18,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17
+      ],
+      "book_audio": "3/3.11.A Bark in the Night.mp3"
+    },
+    {
+      "id": "p2",
+      "title": "The Backpack",
+      "lang": "en-GB",
+      "level": "牛津树自然拼读 Stage 2",
+      "source": "2-06 the backpack.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox-06-the-backpack",
+      "cover_page": 1,
+      "pages": [
+        2,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        20
+      ],
+      "book_audio": "2/2.06.The Backpack.mp3"
+    },
+    {
+      "id": "p3",
+      "title": "Gracie's Nose",
+      "lang": "en-US",
+      "level": "RAZ Level B",
+      "source": "Gracie's Nose.pdf（Learning A-Z）",
+      "source_dir": "build/b-gracie-s-nose",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
+    }
+  ]
+}

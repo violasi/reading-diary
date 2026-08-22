@@ -1,0 +1,84 @@
+{
+  "date": "2026-08-28",
+  "child": "",
+  "note": "素材为家庭自用读物，任务包仅在本机与孩子平板之间传递。",
+  "pieces": [
+    {
+      "id": "p1",
+      "title": "The Red Coat",
+      "lang": "en-GB",
+      "level": "牛津树自然拼读 Stage 3",
+      "source": "3-04 the red coat.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox3-04-the-red-coat",
+      "cover_page": 1,
+      "pages": [
+        18,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17
+      ],
+      "book_audio": "3/3.04.The Red Coat.mp3"
+    },
+    {
+      "id": "p2",
+      "title": "Quick, Quick",
+      "lang": "en-GB",
+      "level": "牛津树自然拼读 Stage 3",
+      "source": "3-05 quick,quick.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox3-05-quick-quick",
+      "cover_page": 1,
+      "pages": [
+        18,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17
+      ],
+      "book_audio": "3/3.05.Quick, Quick.mp3"
+    },
+    {
+      "id": "p3",
+      "title": "Applesauce",
+      "lang": "en-US",
+      "level": "RAZ Level B",
+      "source": "Applesauce.pdf（Learning A-Z）",
+      "source_dir": "build/b-applesauce",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
+    }
+  ]
+}

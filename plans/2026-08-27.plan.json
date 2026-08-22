@@ -1,0 +1,84 @@
+{
+  "date": "2026-08-27",
+  "child": "",
+  "note": "素材为家庭自用读物，任务包仅在本机与孩子平板之间传递。",
+  "pieces": [
+    {
+      "id": "p1",
+      "title": "Silver Foil Rocket",
+      "lang": "en-GB",
+      "level": "牛津树自然拼读 Stage 3",
+      "source": "3-12 Silver Foil Rocket.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox3-12-silver-foil-rocket",
+      "cover_page": 1,
+      "pages": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+      ],
+      "book_audio": "3/3.12.Silver Foil Rocket.mp3"
+    },
+    {
+      "id": "p2",
+      "title": "Rain Again",
+      "lang": "en-GB",
+      "level": "牛津树自然拼读 Stage 3",
+      "source": "3-03 rain again.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox3-03-rain-again",
+      "cover_page": 1,
+      "pages": [
+        18,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17
+      ],
+      "book_audio": "3/3.03.Rain Again.mp3"
+    },
+    {
+      "id": "p3",
+      "title": "Animals Can Move",
+      "lang": "en-US",
+      "level": "RAZ Level B",
+      "source": "Animals Can Move.pdf（Learning A-Z）",
+      "source_dir": "build/b-animals-can-move",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
+    }
+  ]
+}

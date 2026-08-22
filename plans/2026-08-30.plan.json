@@ -1,0 +1,84 @@
+{
+  "date": "2026-08-30",
+  "child": "",
+  "note": "素材为家庭自用读物，任务包仅在本机与孩子平板之间传递。",
+  "pieces": [
+    {
+      "id": "p1",
+      "title": "Leek Hotpot",
+      "lang": "en-GB",
+      "level": "牛津树自然拼读 Stage 3",
+      "source": "3-07 Leek Hotpot.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox3-07-leek-hotpot",
+      "cover_page": 1,
+      "pages": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+      ],
+      "book_audio": "3/3.07.Leek Hotpot.mp3"
+    },
+    {
+      "id": "p2",
+      "title": "Shops",
+      "lang": "en-GB",
+      "level": "牛津树自然拼读 Stage 2",
+      "source": "2-02 shops.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox-02-shops",
+      "cover_page": 1,
+      "pages": [
+        2,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        20
+      ],
+      "book_audio": "2/2.02.Shops.mp3"
+    },
+    {
+      "id": "p3",
+      "title": "Bus in the City",
+      "lang": "en-US",
+      "level": "RAZ Level B",
+      "source": "Bus in the City.pdf（Learning A-Z）",
+      "source_dir": "build/b-bus-in-the-city",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
+    }
+  ]
+}
