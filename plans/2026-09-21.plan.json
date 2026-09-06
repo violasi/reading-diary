@@ -1,15 +1,15 @@
 {
-  "date": "2026-09-07",
+  "date": "2026-09-21",
   "child": "",
   "note": "素材为家庭自用读物，任务包仅在本机与孩子平板之间传递。",
   "pieces": [
     {
       "id": "p1",
-      "title": "星星公主的长发",
+      "title": "快下雨了",
       "lang": "zh-CN",
       "level": "探索12 中文分级",
-      "source": "1.星星公主的长发.pdf（探索12 分级读物）",
-      "source_dir": "build/tx-01",
+      "source": "8.快下雨了.pdf（探索12 分级读物）",
+      "source_dir": "build/tx-08",
       "cover_page": 1,
       "pages": [
         2,
@@ -29,19 +29,25 @@
         16,
         17,
         18,
-        19
+        19,
+        20,
+        21,
+        22,
+        23
       ]
     },
     {
       "id": "p2",
-      "title": "The Fizz-buzz",
+      "title": "Chairs in the Air",
       "lang": "en-GB",
-      "level": "牛津树自然拼读 Stage 2",
-      "source": "2-01 fizz buzz.pdf（Oxford Reading Tree, Oxford University Press）",
-      "source_dir": "build/ox-01-the-fizz-buzz",
+      "level": "牛津树自然拼读 Stage 3",
+      "source": "3-10 chairs in the air.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox3-10-chairs-in-the-air",
       "cover_page": 1,
       "pages": [
+        18,
         2,
+        3,
         4,
         5,
         6,
@@ -55,20 +61,22 @@
         14,
         15,
         16,
-        18
+        17
       ],
-      "book_audio": "2/2.01.The Fizz-buzz.mp3"
+      "book_audio": "3/3.10.Chairs in the Air.mp3"
     },
     {
       "id": "p3",
-      "title": "Shops",
+      "title": "A Bark in the Night",
       "lang": "en-GB",
-      "level": "牛津树自然拼读 Stage 2",
-      "source": "2-02 shops.pdf（Oxford Reading Tree, Oxford University Press）",
-      "source_dir": "build/ox-02-shops",
+      "level": "牛津树自然拼读 Stage 3",
+      "source": "3-11 A Bark in the Night.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox3-11-a-bark-in-the-night",
       "cover_page": 1,
       "pages": [
+        18,
         2,
+        3,
         4,
         5,
         6,
@@ -82,11 +90,9 @@
         14,
         15,
         16,
-        17,
-        18,
-        20
+        17
       ],
-      "book_audio": "2/2.02.Shops.mp3"
+      "book_audio": "3/3.11.A Bark in the Night.mp3"
     }
   ]
 }

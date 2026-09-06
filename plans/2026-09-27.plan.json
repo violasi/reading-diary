@@ -1,44 +1,15 @@
 {
-  "date": "2026-09-08",
+  "date": "2026-09-27",
   "child": "",
   "note": "素材为家庭自用读物，任务包仅在本机与孩子平板之间传递。",
   "pieces": [
     {
       "id": "p1",
-      "title": "Seasick",
-      "lang": "en-GB",
-      "level": "牛津树自然拼读 Level 5",
-      "source": "4-01 Seasick.pdf（Oxford Reading Tree, Oxford University Press）",
-      "source_dir": "build/ox4-01-seasick",
-      "cover_page": 1,
-      "pages": [
-        5,
-        6,
-        7,
-        8,
-        9,
-        10,
-        11,
-        12,
-        13,
-        14,
-        15,
-        16,
-        17,
-        18,
-        19,
-        20,
-        21
-      ],
-      "book_audio": "4/4.01.Seasick.mp3"
-    },
-    {
-      "id": "p2",
-      "title": "星星公主的长发",
+      "title": "大树",
       "lang": "zh-CN",
       "level": "探索12 中文分级",
-      "source": "1.星星公主的长发.pdf（探索12 分级读物）",
-      "source_dir": "build/tx-01",
+      "source": "11.大树.pdf（探索12 分级读物）",
+      "source_dir": "build/tx-11",
       "cover_page": 1,
       "pages": [
         2,
@@ -58,19 +29,23 @@
         16,
         17,
         18,
-        19
+        19,
+        20,
+        21,
+        22,
+        23
       ]
     },
     {
-      "id": "p3",
-      "title": "Such a Fuss",
+      "id": "p2",
+      "title": "No Tricks, Gran!",
       "lang": "en-GB",
-      "level": "牛津树自然拼读 Stage 2",
-      "source": "2-03 such a fuss.pdf（Oxford Reading Tree, Oxford University Press）",
-      "source_dir": "build/ox-03-such-a-fuss",
+      "level": "牛津树自然拼读 Stage 4",
+      "source": "4-08 No Tricks Gran.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox4-08-no-tricks-gran",
       "cover_page": 1,
       "pages": [
-        2,
+        3,
         4,
         5,
         6,
@@ -86,9 +61,38 @@
         16,
         17,
         18,
-        20
+        19
       ],
-      "book_audio": "2/2.03.Such a Fuss.mp3"
+      "book_audio": "4/4.08.No Tricks, Gran!.mp3"
+    },
+    {
+      "id": "p3",
+      "title": "The Lost Chimp",
+      "lang": "en-GB",
+      "level": "牛津树自然拼读 Stage 4",
+      "source": "4-09 the lost chimp.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox4-09-the-lost-chimp",
+      "cover_page": 1,
+      "pages": [
+        18,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17
+      ],
+      "book_audio": "4/4.10.The Lost Chimp.mp3"
     }
   ]
 }

@@ -1,17 +1,21 @@
 {
-  "date": "2026-09-08",
+  "date": "2026-09-26",
   "child": "",
   "note": "素材为家庭自用读物，任务包仅在本机与孩子平板之间传递。",
   "pieces": [
     {
       "id": "p1",
-      "title": "Seasick",
+      "title": "Green Planet Kids",
       "lang": "en-GB",
-      "level": "牛津树自然拼读 Level 5",
-      "source": "4-01 Seasick.pdf（Oxford Reading Tree, Oxford University Press）",
-      "source_dir": "build/ox4-01-seasick",
+      "level": "牛津树自然拼读 Stage 4",
+      "source": "4-11 green planet kids.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox4-11-green-planet-kids",
       "cover_page": 1,
       "pages": [
+        18,
+        2,
+        3,
+        4,
         5,
         6,
         7,
@@ -24,21 +28,17 @@
         14,
         15,
         16,
-        17,
-        18,
-        19,
-        20,
-        21
+        17
       ],
-      "book_audio": "4/4.01.Seasick.mp3"
+      "book_audio": "4/4.11.Green Planet Kids.mp3"
     },
     {
       "id": "p2",
-      "title": "星星公主的长发",
+      "title": "谁会爬",
       "lang": "zh-CN",
       "level": "探索12 中文分级",
-      "source": "1.星星公主的长发.pdf（探索12 分级读物）",
-      "source_dir": "build/tx-01",
+      "source": "10.谁会爬.pdf（探索12 分级读物）",
+      "source_dir": "build/tx-10",
       "cover_page": 1,
       "pages": [
         2,
@@ -58,19 +58,23 @@
         16,
         17,
         18,
-        19
+        19,
+        20,
+        21
       ]
     },
     {
       "id": "p3",
-      "title": "Such a Fuss",
+      "title": "Dolphin Rescue",
       "lang": "en-GB",
-      "level": "牛津树自然拼读 Stage 2",
-      "source": "2-03 such a fuss.pdf（Oxford Reading Tree, Oxford University Press）",
-      "source_dir": "build/ox-03-such-a-fuss",
+      "level": "牛津树自然拼读 Stage 4",
+      "source": "4-06 dolphin rescue.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox4-06-dolphin-rescue",
       "cover_page": 1,
       "pages": [
+        18,
         2,
+        3,
         4,
         5,
         6,
@@ -84,11 +88,9 @@
         14,
         15,
         16,
-        17,
-        18,
-        20
+        17
       ],
-      "book_audio": "2/2.03.Such a Fuss.mp3"
+      "book_audio": "4/4.06.Dolphin Rescue.mp3"
     }
   ]
 }

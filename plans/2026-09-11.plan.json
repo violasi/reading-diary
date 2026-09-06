@@ -1,44 +1,15 @@
 {
-  "date": "2026-09-08",
+  "date": "2026-09-11",
   "child": "",
   "note": "素材为家庭自用读物，任务包仅在本机与孩子平板之间传递。",
   "pieces": [
     {
       "id": "p1",
-      "title": "Seasick",
-      "lang": "en-GB",
-      "level": "牛津树自然拼读 Level 5",
-      "source": "4-01 Seasick.pdf（Oxford Reading Tree, Oxford University Press）",
-      "source_dir": "build/ox4-01-seasick",
-      "cover_page": 1,
-      "pages": [
-        5,
-        6,
-        7,
-        8,
-        9,
-        10,
-        11,
-        12,
-        13,
-        14,
-        15,
-        16,
-        17,
-        18,
-        19,
-        20,
-        21
-      ],
-      "book_audio": "4/4.01.Seasick.mp3"
-    },
-    {
-      "id": "p2",
-      "title": "星星公主的长发",
+      "title": "小猫吃什么",
       "lang": "zh-CN",
       "level": "探索12 中文分级",
-      "source": "1.星星公主的长发.pdf（探索12 分级读物）",
-      "source_dir": "build/tx-01",
+      "source": "3.小猫吃什么.pdf（探索12 分级读物）",
+      "source_dir": "build/tx-03",
       "cover_page": 1,
       "pages": [
         2,
@@ -62,12 +33,12 @@
       ]
     },
     {
-      "id": "p3",
-      "title": "Such a Fuss",
+      "id": "p2",
+      "title": "The Zip",
       "lang": "en-GB",
       "level": "牛津树自然拼读 Stage 2",
-      "source": "2-03 such a fuss.pdf（Oxford Reading Tree, Oxford University Press）",
-      "source_dir": "build/ox-03-such-a-fuss",
+      "source": "2-07 the zip.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox-07-the-zip",
       "cover_page": 1,
       "pages": [
         2,
@@ -88,7 +59,36 @@
         18,
         20
       ],
-      "book_audio": "2/2.03.Such a Fuss.mp3"
+      "book_audio": "2/2.07.The Zip .mp3"
+    },
+    {
+      "id": "p3",
+      "title": "Posh Shops",
+      "lang": "en-GB",
+      "level": "牛津树自然拼读 Stage 2",
+      "source": "2-08 posh shop.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox-08-posh-shops",
+      "cover_page": 1,
+      "pages": [
+        2,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        20
+      ],
+      "book_audio": "2/2.08.Posh Shops.mp3"
     }
   ]
 }
