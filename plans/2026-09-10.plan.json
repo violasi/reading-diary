@@ -1,0 +1,76 @@
+{
+  "date": "2026-09-10",
+  "child": "",
+  "note": "素材为家庭自用读物，任务包仅在本机与孩子平板之间传递。",
+  "pieces": [
+    {
+      "id": "p1",
+      "title": "Toads in the Road",
+      "lang": "en-GB",
+      "level": "牛津树自然拼读 Stage 3",
+      "source": "3-09 Toads in the Road.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox3-09-toads-in-the-road",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19
+      ],
+      "book_audio": "3/3.09.Toads in the Road.mp3"
+    },
+    {
+      "id": "p2",
+      "title": "It Is School Time",
+      "lang": "en-US",
+      "level": "RAZ Level B",
+      "source": "It Is School Time.pdf（Learning A-Z）",
+      "source_dir": "build/b-it-is-school-time",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ]
+    },
+    {
+      "id": "p3",
+      "title": "It Is Spring",
+      "lang": "en-US",
+      "level": "RAZ Level B",
+      "source": "It Is Spring.pdf（Learning A-Z）",
+      "source_dir": "build/b-it-is-spring",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
+    }
+  ]
+}

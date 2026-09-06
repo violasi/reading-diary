@@ -1,0 +1,74 @@
+{
+  "date": "2026-09-16",
+  "child": "",
+  "note": "素材为家庭自用读物，任务包仅在本机与孩子平板之间传递。",
+  "pieces": [
+    {
+      "id": "p1",
+      "title": "Rain Again",
+      "lang": "en-GB",
+      "level": "牛津树自然拼读 Stage 3",
+      "source": "3-03 rain again.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox3-03-rain-again",
+      "cover_page": 1,
+      "pages": [
+        18,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17
+      ],
+      "book_audio": "3/3.03.Rain Again.mp3"
+    },
+    {
+      "id": "p2",
+      "title": "Three Baby Birds",
+      "lang": "en-US",
+      "level": "RAZ Level B",
+      "source": "Three Baby Birds.pdf（Learning A-Z）",
+      "source_dir": "build/b-three-baby-birds",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
+    },
+    {
+      "id": "p3",
+      "title": "Two Little Dicky Birds",
+      "lang": "en-US",
+      "level": "RAZ Level B",
+      "source": "Two Little Dicky Birds.pdf（Learning A-Z）",
+      "source_dir": "build/b-two-little-dicky-birds",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
+    }
+  ]
+}

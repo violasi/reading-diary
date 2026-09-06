@@ -1,0 +1,74 @@
+{
+  "date": "2026-09-08",
+  "child": "",
+  "note": "素材为家庭自用读物，任务包仅在本机与孩子平板之间传递。",
+  "pieces": [
+    {
+      "id": "p1",
+      "title": "Leek Hotpot",
+      "lang": "en-GB",
+      "level": "牛津树自然拼读 Stage 3",
+      "source": "3-07 Leek Hotpot.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox3-07-leek-hotpot",
+      "cover_page": 1,
+      "pages": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+      ],
+      "book_audio": "3/3.07.Leek Hotpot.mp3"
+    },
+    {
+      "id": "p2",
+      "title": "Carlos and His Teacher",
+      "lang": "en-US",
+      "level": "RAZ Level B",
+      "source": "Carlos and His Teacher.pdf（Learning A-Z）",
+      "source_dir": "build/b-claros-and-his-techer",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
+    },
+    {
+      "id": "p3",
+      "title": "Games We Play",
+      "lang": "en-US",
+      "level": "RAZ Level B",
+      "source": "Games We Play.pdf（Learning A-Z）",
+      "source_dir": "build/b-games-we-play",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
+    }
+  ]
+}
