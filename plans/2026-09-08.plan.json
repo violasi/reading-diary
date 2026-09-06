@@ -5,6 +5,34 @@
   "pieces": [
     {
       "id": "p1",
+      "title": "Egg Fried Rice",
+      "lang": "en-GB",
+      "level": "牛津树自然拼读 Stage 4",
+      "source": "4-02 egg fried rice.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox4-02-egg-fried-rice",
+      "cover_page": 1,
+      "pages": [
+        18,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17
+      ]
+    },
+    {
+      "id": "p2",
       "title": "Leek Hotpot",
       "lang": "en-GB",
       "level": "牛津树自然拼读 Stage 3",
@@ -33,31 +61,12 @@
       "book_audio": "3/3.07.Leek Hotpot.mp3"
     },
     {
-      "id": "p2",
-      "title": "Games We Play",
-      "lang": "en-US",
-      "level": "RAZ Level B",
-      "source": "Games We Play.pdf（Learning A-Z）",
-      "source_dir": "build/b-games-we-play",
-      "cover_page": 1,
-      "pages": [
-        3,
-        4,
-        5,
-        6,
-        7,
-        8,
-        9,
-        10
-      ]
-    },
-    {
       "id": "p3",
-      "title": "Go Animals Go",
-      "lang": "en-US",
-      "level": "RAZ Level B",
-      "source": "Go Animals Go.pdf（Learning A-Z）",
-      "source_dir": "build/b-go-animals-go",
+      "title": "天亮了",
+      "lang": "zh-CN",
+      "level": "探索12 中文分级",
+      "source": "2.天亮了.pdf（探索12 分级读物）",
+      "source_dir": "build/tx-02",
       "cover_page": 1,
       "pages": [
         3,
@@ -67,26 +76,14 @@
         7,
         8,
         9,
-        10
-      ]
-    },
-    {
-      "id": "p4",
-      "title": "I Read a Book",
-      "lang": "en-US",
-      "level": "RAZ Level B",
-      "source": "I Read a Book.pdf（Learning A-Z）",
-      "source_dir": "build/b-i-read-a-book",
-      "cover_page": 1,
-      "pages": [
-        3,
-        4,
-        5,
-        6,
-        7,
-        8,
-        9,
-        10
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17
       ]
     }
   ]

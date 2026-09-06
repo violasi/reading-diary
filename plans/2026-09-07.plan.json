@@ -5,6 +5,34 @@
   "pieces": [
     {
       "id": "p1",
+      "title": "Seasick",
+      "lang": "en-GB",
+      "level": "牛津树自然拼读 Level 5",
+      "source": "4-01 Seasick.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox4-01-seasick",
+      "cover_page": 1,
+      "pages": [
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21
+      ]
+    },
+    {
+      "id": "p2",
       "title": "The Rook and the Ring",
       "lang": "en-GB",
       "level": "牛津树自然拼读 Stage 3",
@@ -33,31 +61,12 @@
       "book_audio": "3/3.06.The Rook and the Ring.mp3"
     },
     {
-      "id": "p2",
-      "title": "Bananas Sometimes",
-      "lang": "en-US",
-      "level": "RAZ Level B",
-      "source": "Bananas Sometimes.pdf（Learning A-Z）",
-      "source_dir": "build/b-bananas-sometimes",
-      "cover_page": 1,
-      "pages": [
-        3,
-        4,
-        5,
-        6,
-        7,
-        8,
-        9,
-        10
-      ]
-    },
-    {
       "id": "p3",
-      "title": "Bus in the City",
-      "lang": "en-US",
-      "level": "RAZ Level B",
-      "source": "Bus in the City.pdf（Learning A-Z）",
-      "source_dir": "build/b-bus-in-the-city",
+      "title": "星星公主的长发",
+      "lang": "zh-CN",
+      "level": "探索12 中文分级",
+      "source": "1.星星公主的长发.pdf（探索12 分级读物）",
+      "source_dir": "build/tx-01",
       "cover_page": 1,
       "pages": [
         3,
@@ -67,26 +76,14 @@
         7,
         8,
         9,
-        10
-      ]
-    },
-    {
-      "id": "p4",
-      "title": "Carlos and His Teacher",
-      "lang": "en-US",
-      "level": "RAZ Level B",
-      "source": "Carlos and His Teacher.pdf（Learning A-Z）",
-      "source_dir": "build/b-claros-and-his-techer",
-      "cover_page": 1,
-      "pages": [
-        3,
-        4,
-        5,
-        6,
-        7,
-        8,
-        9,
-        10
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17
       ]
     }
   ]
