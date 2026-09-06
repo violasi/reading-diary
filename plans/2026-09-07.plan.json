@@ -69,6 +69,25 @@
         9,
         10
       ]
+    },
+    {
+      "id": "p4",
+      "title": "Carlos and His Teacher",
+      "lang": "en-US",
+      "level": "RAZ Level B",
+      "source": "Carlos and His Teacher.pdf（Learning A-Z）",
+      "source_dir": "build/b-claros-and-his-techer",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
     }
   ]
 }

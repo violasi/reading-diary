@@ -5,16 +5,14 @@
   "pieces": [
     {
       "id": "p1",
-      "title": "Queen's Maid",
+      "title": "Such a Fuss",
       "lang": "en-GB",
-      "level": "牛津树自然拼读 Stage 3",
-      "source": "3-08 queen's maid.pdf（Oxford Reading Tree, Oxford University Press）",
-      "source_dir": "build/ox3-08-queens-maid",
+      "level": "牛津树自然拼读 Stage 2",
+      "source": "2-03 such a fuss.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox-03-such-a-fuss",
       "cover_page": 1,
       "pages": [
-        18,
         2,
-        3,
         4,
         5,
         6,
@@ -28,17 +26,19 @@
         14,
         15,
         16,
-        17
+        17,
+        18,
+        20
       ],
-      "book_audio": "3/3.08.Queen's Maid.mp3"
+      "book_audio": "2/2.03.Such a Fuss.mp3"
     },
     {
       "id": "p2",
-      "title": "Winter Fun",
+      "title": "I Can Be",
       "lang": "en-US",
-      "level": "RAZ Level B",
-      "source": "Winter Fun.pdf（Learning A-Z）",
-      "source_dir": "build/b-winter-fun",
+      "level": "RAZ Level C",
+      "source": "I Can Be.pdf（Learning A-Z）",
+      "source_dir": "build/c-i-can-be",
       "cover_page": 1,
       "pages": [
         3,
@@ -53,11 +53,30 @@
     },
     {
       "id": "p3",
-      "title": "You Can Go",
+      "title": "I Looked Everywhere",
       "lang": "en-US",
-      "level": "RAZ Level B",
-      "source": "You Can Go.pdf（Learning A-Z）",
-      "source_dir": "build/b-you-can-go",
+      "level": "RAZ Level C",
+      "source": "I Looked Everywhere.pdf（Learning A-Z）",
+      "source_dir": "build/c-i-looked-everywhere",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
+    },
+    {
+      "id": "p4",
+      "title": "I Won't",
+      "lang": "en-US",
+      "level": "RAZ Level C",
+      "source": "I Won't.pdf（Learning A-Z）",
+      "source_dir": "build/c-i-won-t",
       "cover_page": 1,
       "pages": [
         3,

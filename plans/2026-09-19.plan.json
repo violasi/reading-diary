@@ -5,16 +5,14 @@
   "pieces": [
     {
       "id": "p1",
-      "title": "The Rook and the Ring",
+      "title": "The Fizz-buzz",
       "lang": "en-GB",
-      "level": "牛津树自然拼读 Stage 3",
-      "source": "3-06 the rock and the ring.pdf（Oxford Reading Tree, Oxford University Press）",
-      "source_dir": "build/ox3-06-the-rook-and-the-ring",
+      "level": "牛津树自然拼读 Stage 2",
+      "source": "2-01 fizz buzz.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox-01-the-fizz-buzz",
       "cover_page": 1,
       "pages": [
-        18,
         2,
-        3,
         4,
         5,
         6,
@@ -28,17 +26,17 @@
         14,
         15,
         16,
-        17
+        18
       ],
-      "book_audio": "3/3.06.The Rook and the Ring.mp3"
+      "book_audio": "2/2.01.The Fizz-buzz.mp3"
     },
     {
       "id": "p2",
-      "title": "What Has These Stripes",
+      "title": "Get In",
       "lang": "en-US",
-      "level": "RAZ Level B",
-      "source": "What Has These Stripes.pdf（Learning A-Z）",
-      "source_dir": "build/b-what-has-these-stripes",
+      "level": "RAZ Level C",
+      "source": "Get In.pdf（Learning A-Z）",
+      "source_dir": "build/c-get-in",
       "cover_page": 1,
       "pages": [
         3,
@@ -53,11 +51,30 @@
     },
     {
       "id": "p3",
-      "title": "What Has This Tail",
+      "title": "Go Away, Lily",
       "lang": "en-US",
-      "level": "RAZ Level B",
-      "source": "What Has This Tail.pdf（Learning A-Z）",
-      "source_dir": "build/b-what-has-this-tail",
+      "level": "RAZ Level C",
+      "source": "Go Away, Lily.pdf（Learning A-Z）",
+      "source_dir": "build/c-go-away-lily",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
+    },
+    {
+      "id": "p4",
+      "title": "Going Away",
+      "lang": "en-US",
+      "level": "RAZ Level C",
+      "source": "Going Away.pdf（Learning A-Z）",
+      "source_dir": "build/c-going-away",
       "cover_page": 1,
       "pages": [
         3,

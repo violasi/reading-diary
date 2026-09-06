@@ -34,11 +34,11 @@
     },
     {
       "id": "p2",
-      "title": "It Is School Time",
+      "title": "Maria and Her Teacher",
       "lang": "en-US",
       "level": "RAZ Level B",
-      "source": "It Is School Time.pdf（Learning A-Z）",
-      "source_dir": "build/b-it-is-school-time",
+      "source": "Maria and Her Teacher.pdf（Learning A-Z）",
+      "source_dir": "build/b-maria-and-her-teacher",
       "cover_page": 1,
       "pages": [
         3,
@@ -48,18 +48,35 @@
         7,
         8,
         9,
-        10,
-        11,
-        12
+        10
       ]
     },
     {
       "id": "p3",
-      "title": "It Is Spring",
+      "title": "Near and Far Away",
       "lang": "en-US",
       "level": "RAZ Level B",
-      "source": "It Is Spring.pdf（Learning A-Z）",
-      "source_dir": "build/b-it-is-spring",
+      "source": "Near and Far Away.pdf（Learning A-Z）",
+      "source_dir": "build/b-near-and-far-away",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
+    },
+    {
+      "id": "p4",
+      "title": "On the Farm",
+      "lang": "en-US",
+      "level": "RAZ Level B",
+      "source": "On the Farm.pdf（Learning A-Z）",
+      "source_dir": "build/b-on-the-farm",
       "cover_page": 1,
       "pages": [
         3,

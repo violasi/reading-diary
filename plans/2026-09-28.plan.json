@@ -1,18 +1,17 @@
 {
-  "date": "2026-09-15",
+  "date": "2026-09-28",
   "child": "",
   "note": "素材为家庭自用读物，任务包仅在本机与孩子平板之间传递。",
   "pieces": [
     {
       "id": "p1",
-      "title": "Wet Feet",
+      "title": "Jack",
       "lang": "en-GB",
-      "level": "牛津树自然拼读 Stage 3",
-      "source": "3-02 wet feet.pdf（Oxford Reading Tree, Oxford University Press）",
-      "source_dir": "build/ox3-02-wet-feet",
+      "level": "牛津树自然拼读 Stage 2",
+      "source": "2-10 Jack.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox-10-jack",
       "cover_page": 1,
       "pages": [
-        18,
         2,
         3,
         4,
@@ -28,17 +27,18 @@
         14,
         15,
         16,
-        17
+        17,
+        18
       ],
-      "book_audio": "3/3.02.Wet Feet.mp3"
+      "book_audio": "2/2.10.Jack.mp3"
     },
     {
       "id": "p2",
-      "title": "What Has These Stripes",
+      "title": "What Is at the Zoo",
       "lang": "en-US",
-      "level": "RAZ Level B",
-      "source": "What Has These Stripes.pdf（Learning A-Z）",
-      "source_dir": "build/b-what-has-these-stripes",
+      "level": "RAZ Level C",
+      "source": "What Is at the Zoo.pdf（Learning A-Z）",
+      "source_dir": "build/c-what-is-at-the-zoo",
       "cover_page": 1,
       "pages": [
         3,
@@ -53,11 +53,11 @@
     },
     {
       "id": "p3",
-      "title": "What Has This Tail",
+      "title": "What's My Job",
       "lang": "en-US",
-      "level": "RAZ Level B",
-      "source": "What Has This Tail.pdf（Learning A-Z）",
-      "source_dir": "build/b-what-has-this-tail",
+      "level": "RAZ Level C",
+      "source": "What's My Job.pdf（Learning A-Z）",
+      "source_dir": "build/c-what-s-my-job",
       "cover_page": 1,
       "pages": [
         3,
@@ -72,11 +72,11 @@
     },
     {
       "id": "p4",
-      "title": "Where",
+      "title": "When Is Nighttime",
       "lang": "en-US",
-      "level": "RAZ Level B",
-      "source": "Where.pdf（Learning A-Z）",
-      "source_dir": "build/b-where",
+      "level": "RAZ Level C",
+      "source": "When Is Nighttime.pdf（Learning A-Z）",
+      "source_dir": "build/c-when-is-nighttime",
       "cover_page": 1,
       "pages": [
         3,

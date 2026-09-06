@@ -34,11 +34,11 @@
     },
     {
       "id": "p2",
-      "title": "Light and Heavy",
+      "title": "Paint It Purple",
       "lang": "en-US",
       "level": "RAZ Level B",
-      "source": "Light and Heavy.pdf（Learning A-Z）",
-      "source_dir": "build/b-light-and-heavy",
+      "source": "Paint It Purple.pdf（Learning A-Z）",
+      "source_dir": "build/b-paint-it-purple",
       "cover_page": 1,
       "pages": [
         3,
@@ -53,11 +53,30 @@
     },
     {
       "id": "p3",
-      "title": "Maria and Her Teacher",
+      "title": "Playful Puppy",
       "lang": "en-US",
       "level": "RAZ Level B",
-      "source": "Maria and Her Teacher.pdf（Learning A-Z）",
-      "source_dir": "build/b-maria-and-her-teacher",
+      "source": "Playful Puppy.pdf（Learning A-Z）",
+      "source_dir": "build/b-playful-puppy",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
+    },
+    {
+      "id": "p4",
+      "title": "Pond Life",
+      "lang": "en-US",
+      "level": "RAZ Level B",
+      "source": "Pond Life.pdf（Learning A-Z）",
+      "source_dir": "build/b-pond-life",
       "cover_page": 1,
       "pages": [
         3,

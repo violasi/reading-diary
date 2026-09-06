@@ -34,11 +34,11 @@
     },
     {
       "id": "p2",
-      "title": "What Has These Feet",
+      "title": "Different Kinds of Sharks",
       "lang": "en-US",
-      "level": "RAZ Level B",
-      "source": "What Has These Feet.pdf（Learning A-Z）",
-      "source_dir": "build/b-what-has-these-feet",
+      "level": "RAZ Level C",
+      "source": "Different Kinds of Sharks.pdf（Learning A-Z）",
+      "source_dir": "build/c-different-kinds-of-sharks",
       "cover_page": 1,
       "pages": [
         3,
@@ -53,11 +53,11 @@
     },
     {
       "id": "p3",
-      "title": "What Has These Spots",
+      "title": "Fall",
       "lang": "en-US",
-      "level": "RAZ Level B",
-      "source": "What Has These Spots.pdf（Learning A-Z）",
-      "source_dir": "build/b-what-has-these-spots",
+      "level": "RAZ Level C",
+      "source": "Fall.pdf（Learning A-Z）",
+      "source_dir": "build/c-fall",
       "cover_page": 1,
       "pages": [
         3,
@@ -68,6 +68,27 @@
         8,
         9,
         10
+      ]
+    },
+    {
+      "id": "p4",
+      "title": "Feelings",
+      "lang": "en-US",
+      "level": "RAZ Level C",
+      "source": "Feelings.pdf（Learning A-Z）",
+      "source_dir": "build/c-feelings",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
       ]
     }
   ]

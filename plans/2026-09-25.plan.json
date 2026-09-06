@@ -1,20 +1,18 @@
 {
-  "date": "2026-09-15",
+  "date": "2026-09-25",
   "child": "",
   "note": "素材为家庭自用读物，任务包仅在本机与孩子平板之间传递。",
   "pieces": [
     {
       "id": "p1",
-      "title": "Wet Feet",
+      "title": "The Zip",
       "lang": "en-GB",
-      "level": "牛津树自然拼读 Stage 3",
-      "source": "3-02 wet feet.pdf（Oxford Reading Tree, Oxford University Press）",
-      "source_dir": "build/ox3-02-wet-feet",
+      "level": "牛津树自然拼读 Stage 2",
+      "source": "2-07 the zip.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox-07-the-zip",
       "cover_page": 1,
       "pages": [
-        18,
         2,
-        3,
         4,
         5,
         6,
@@ -28,17 +26,19 @@
         14,
         15,
         16,
-        17
+        17,
+        18,
+        20
       ],
-      "book_audio": "3/3.02.Wet Feet.mp3"
+      "book_audio": "2/2.07.The Zip .mp3"
     },
     {
       "id": "p2",
-      "title": "What Has These Stripes",
+      "title": "Space",
       "lang": "en-US",
-      "level": "RAZ Level B",
-      "source": "What Has These Stripes.pdf（Learning A-Z）",
-      "source_dir": "build/b-what-has-these-stripes",
+      "level": "RAZ Level C",
+      "source": "Space.pdf（Learning A-Z）",
+      "source_dir": "build/c-space",
       "cover_page": 1,
       "pages": [
         3,
@@ -53,11 +53,11 @@
     },
     {
       "id": "p3",
-      "title": "What Has This Tail",
+      "title": "Taking Turns",
       "lang": "en-US",
-      "level": "RAZ Level B",
-      "source": "What Has This Tail.pdf（Learning A-Z）",
-      "source_dir": "build/b-what-has-this-tail",
+      "level": "RAZ Level C",
+      "source": "Taking Turns.pdf（Learning A-Z）",
+      "source_dir": "build/c-taking-turns",
       "cover_page": 1,
       "pages": [
         3,
@@ -67,16 +67,18 @@
         7,
         8,
         9,
-        10
+        10,
+        11,
+        12
       ]
     },
     {
       "id": "p4",
-      "title": "Where",
+      "title": "The Woodsy Band Jam",
       "lang": "en-US",
-      "level": "RAZ Level B",
-      "source": "Where.pdf（Learning A-Z）",
-      "source_dir": "build/b-where",
+      "level": "RAZ Level C",
+      "source": "The Woodsy Band Jam.pdf（Learning A-Z）",
+      "source_dir": "build/c-the-woodsy-band-jam",
       "cover_page": 1,
       "pages": [
         3,

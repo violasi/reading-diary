@@ -34,11 +34,11 @@
     },
     {
       "id": "p2",
-      "title": "Pond Life",
+      "title": "We Pack a Picnic",
       "lang": "en-US",
       "level": "RAZ Level B",
-      "source": "Pond Life.pdf（Learning A-Z）",
-      "source_dir": "build/b-pond-life",
+      "source": "We Pack a Picnic.pdf（Learning A-Z）",
+      "source_dir": "build/b-we-pack-a-picnic",
       "cover_page": 1,
       "pages": [
         3,
@@ -53,11 +53,30 @@
     },
     {
       "id": "p3",
-      "title": "Taking the Bus",
+      "title": "What Has These Feet",
       "lang": "en-US",
       "level": "RAZ Level B",
-      "source": "Taking the Bus.pdf（Learning A-Z）",
-      "source_dir": "build/b-taking-the-bus",
+      "source": "What Has These Feet.pdf（Learning A-Z）",
+      "source_dir": "build/b-what-has-these-feet",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
+    },
+    {
+      "id": "p4",
+      "title": "What Has These Spots",
+      "lang": "en-US",
+      "level": "RAZ Level B",
+      "source": "What Has These Spots.pdf（Learning A-Z）",
+      "source_dir": "build/b-what-has-these-spots",
       "cover_page": 1,
       "pages": [
         3,

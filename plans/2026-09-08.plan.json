@@ -34,11 +34,11 @@
     },
     {
       "id": "p2",
-      "title": "Carlos and His Teacher",
+      "title": "Games We Play",
       "lang": "en-US",
       "level": "RAZ Level B",
-      "source": "Carlos and His Teacher.pdf（Learning A-Z）",
-      "source_dir": "build/b-claros-and-his-techer",
+      "source": "Games We Play.pdf（Learning A-Z）",
+      "source_dir": "build/b-games-we-play",
       "cover_page": 1,
       "pages": [
         3,
@@ -53,11 +53,30 @@
     },
     {
       "id": "p3",
-      "title": "Games We Play",
+      "title": "Go Animals Go",
       "lang": "en-US",
       "level": "RAZ Level B",
-      "source": "Games We Play.pdf（Learning A-Z）",
-      "source_dir": "build/b-games-we-play",
+      "source": "Go Animals Go.pdf（Learning A-Z）",
+      "source_dir": "build/b-go-animals-go",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
+    },
+    {
+      "id": "p4",
+      "title": "I Read a Book",
+      "lang": "en-US",
+      "level": "RAZ Level B",
+      "source": "I Read a Book.pdf（Learning A-Z）",
+      "source_dir": "build/b-i-read-a-book",
       "cover_page": 1,
       "pages": [
         3,

@@ -5,14 +5,14 @@
   "pieces": [
     {
       "id": "p1",
-      "title": "Toads in the Road",
+      "title": "Less Mess",
       "lang": "en-GB",
-      "level": "牛津树自然拼读 Stage 3",
-      "source": "3-09 Toads in the Road.pdf（Oxford Reading Tree, Oxford University Press）",
-      "source_dir": "build/ox3-09-toads-in-the-road",
+      "level": "牛津树自然拼读 Stage 2",
+      "source": "2-04 less mess.pdf（Oxford Reading Tree, Oxford University Press）",
+      "source_dir": "build/ox-04-less-mess",
       "cover_page": 1,
       "pages": [
-        3,
+        2,
         4,
         5,
         6,
@@ -28,17 +28,55 @@
         16,
         17,
         18,
-        19
+        20
       ],
-      "book_audio": "3/3.09.Toads in the Road.mp3"
+      "book_audio": "2/2.04.Less Mess.mp3"
     },
     {
       "id": "p2",
-      "title": "You and I",
+      "title": "I Wonder",
       "lang": "en-US",
-      "level": "RAZ Level B",
-      "source": "You and I.pdf（Learning A-Z）",
-      "source_dir": "build/b-you-and-i",
+      "level": "RAZ Level C",
+      "source": "I Wonder.pdf（Learning A-Z）",
+      "source_dir": "build/c-i-wonder",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
+    },
+    {
+      "id": "p3",
+      "title": "Jack and Lily's Favorite Food",
+      "lang": "en-US",
+      "level": "RAZ Level C",
+      "source": "Jack and Lily's Favorite Food.pdf（Learning A-Z）",
+      "source_dir": "build/c-jack-and-lily-s-favorite-food",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
+    },
+    {
+      "id": "p4",
+      "title": "Luck Did It",
+      "lang": "en-US",
+      "level": "RAZ Level C",
+      "source": "Luck Did It.pdf（Learning A-Z）",
+      "source_dir": "build/c-luck-did-it",
       "cover_page": 1,
       "pages": [
         3,

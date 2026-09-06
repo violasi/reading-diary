@@ -34,11 +34,11 @@
     },
     {
       "id": "p2",
-      "title": "Paint It Purple",
+      "title": "Three Baby Birds",
       "lang": "en-US",
       "level": "RAZ Level B",
-      "source": "Paint It Purple.pdf（Learning A-Z）",
-      "source_dir": "build/b-paint-it-purple",
+      "source": "Three Baby Birds.pdf（Learning A-Z）",
+      "source_dir": "build/b-three-baby-birds",
       "cover_page": 1,
       "pages": [
         3,
@@ -53,11 +53,30 @@
     },
     {
       "id": "p3",
-      "title": "Playful Puppy",
+      "title": "Two Little Dicky Birds",
       "lang": "en-US",
       "level": "RAZ Level B",
-      "source": "Playful Puppy.pdf（Learning A-Z）",
-      "source_dir": "build/b-playful-puppy",
+      "source": "Two Little Dicky Birds.pdf（Learning A-Z）",
+      "source_dir": "build/b-two-little-dicky-birds",
+      "cover_page": 1,
+      "pages": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
+    },
+    {
+      "id": "p4",
+      "title": "We Make Cookies",
+      "lang": "en-US",
+      "level": "RAZ Level B",
+      "source": "We Make Cookies.pdf（Learning A-Z）",
+      "source_dir": "build/b-we-make-cookies",
       "cover_page": 1,
       "pages": [
         3,
