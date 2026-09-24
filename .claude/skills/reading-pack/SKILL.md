@@ -109,6 +109,22 @@ App 里生成每天的计划。plan 里把 `date` 换成 `series` 就行（两�
 - 每篇还会自动带上 `series`，它就是家长页里可勾选的那个分组名。
 - 产出 `packs/<系列名>.rdpkg`，导入后进书架，不进打卡日历。
 
+⚠️ **牛津 Stage 4 不能按原编号排**。这一级混了两类难度差很多的书：
+
+| 类型 | 是什么 | 书 |
+|---|---|---|
+| B 类（Fiction Pack A） | **不引入任何新音**，只是把已学的音拼成更长的词（CVCC/CCVCC） | No Tricks Gran、Painting the Loft、The Lost Chimp、Green Planet Kids、Crunch! |
+| A 类（Floppy's Phonics） | **同一个音的多种拼法**（ai/ay/a-e/a、ie/igh/i-e/y/i…） | Seasick、Dolphin Rescue、Craig、Egg Fried Rice、Joe、The Knight Who Was Afraid |
+
+A 类才是 Stage 3→4 的悬崖：前三级给孩子的契约是「一个组合 = 一个音」，A 类把契约
+撕了。其中 The Knight Who Was Afraid 的 kn/wr 是**首字母不发音**，最难。
+所以系列包里先排 B 类、再排 A 类，kn/wr 压最后。按原编号排会让孩子第 3 本就撞上
+Craig（ai/ay/a-e/a）、第 4 本撞上 kn/wr。
+
+另：**4-07 The Crab Dragon 的 PDF 只有 9 页、故事断在半截**（文件能正常打开，
+别被骗），不可用；**4-12「Cruch.pdf」里塞了两本书**，前 21 页才是 Crunch!，
+后 16 页是另一本《Cosmo for Captain》。
+
 什么时候用哪种：
 
 | | 用当日任务包 | 用系列包 |
