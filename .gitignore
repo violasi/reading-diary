@@ -21,8 +21,10 @@ source/
 A.PDF/
 B/
 C.PDF/
-# 中文分级读物（目录名带空格，要引号或转义；这里整目录挡掉最省事）
+# 中文分级：探索12 → 成长15 → 飞跃15（目录名前缀的数字就是难度顺序）
 2.探索12  PDF版/
+3.成长15 PDF版/
+4.飞跃15  PDF版/
 # 百度云下载中的半成品。**必须单独挡** —— 它们叫 xxx.pdf.baiduyun.p.downloading，
 # 结尾不是 .pdf，上面的后缀规则一个都盖不住，差点跟着 plan 一起提交上去。
 *.downloading
@@ -48,6 +50,9 @@ android/capacitor-cordova-android-plugins/
 android/keystore/
 # 打好的 APK
 out/
+
+# 下载工具的临时分片
+.accelerate/
 
 # macOS
 .DS_Store
