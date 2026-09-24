@@ -23,13 +23,29 @@ export interface PackPiece {
   pages: PackPage[]
   cover?: string
   level?: string
+  /**
+   * 系列名。**只有系列包会带**（一次性导入一整套书那种）。
+   * 当日任务包没有这个字段，生成计划时按 groupOf 回退到 level 分组。
+   */
+  series?: string
+  /**
+   * 系列内的难度序号，越小越简单。只有系列包会带。
+   * 生成计划「从易到难」优先看它；没有就退化到从 level 里抠数字（见 db.ts 的 rankOf）。
+   */
+  seq?: number
   source?: string
 }
 
 export interface PackManifest {
   format: 'reading-diary-pack'
   version: number
-  date: string
+  /**
+   * 当日任务包有日期；**系列包没有**（用 series 代替）。
+   * 两者至少要有一个，pack.ts 的 validate 会拦。
+   */
+  date?: string
+  /** 系列包：一次性导入一整套书，不绑定任何一天。有它就没有 date */
+  series?: string
   child?: string
   note?: string
   pieces: PackPiece[]
@@ -105,3 +121,15 @@ export const emptyProgress = (): PieceProgress => ({
  * 这个字段，所以这里只看它一个 —— 听没听过、听了几遍都不影响。
  */
 export const isPieceDone = (p: PieceProgress) => p.finished
+
+/**
+ * 生成当日计划时的分组键 —— 家长在家长页勾选从哪些分组里抽书。
+ *
+ * 系列优先、回退到分级：系列包带 `series`，而平板上已有的书都是从当日任务包
+ * 来的、只有 `level`（如「牛津树自然拼读 Stage 3」「RAZ Level B」）。
+ * 用分级当分组反而更细 —— 家长能只勾 Stage 3/4 而把已经偏简单的 RAZ B 排除掉。
+ */
+export const groupOf = (p: PackPiece) => (p.series || p.level || '未分类').trim()
+
+/** 中文书还是英文书。分组、配额都按这个分 */
+export const langOf = (p: { lang?: string }) => (p.lang || '').startsWith('zh') ? 'zh' : 'en'

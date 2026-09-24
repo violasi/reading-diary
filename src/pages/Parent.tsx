@@ -2,8 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import type { PackManifest } from '../types'
 import {
   cleanupGradedRecordings,
+  generateDayPlan,
   getMigrationStatus,
+  listGroups,
+  loadGenGroups,
   recordingsFootprint,
+  saveGenGroups,
   clearAllProgress,
   clearDay,
   loadProgress,
@@ -12,6 +16,7 @@ import {
   loadStars,
   saveSettings,
   saveStars,
+  type GroupStat,
 } from '../lib/db'
 import { PackError, importPack } from '../lib/pack'
 import { Star } from '../components/Icons'
@@ -126,6 +131,10 @@ function ParentPanel({
   const [err, setErr] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [footprint, setFootprint] = useState<{ count: number; bytes: number } | null>(null)
+  // 生成当日计划：家长勾选从哪些分组抽书（RAZ B 太简单就别勾）
+  const [groups, setGroups] = useState<GroupStat[] | null>(null)
+  const [picked, setPicked] = useState<string[]>([])
+  const [generating, setGenerating] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const urlRef = useRef<string | null>(null)
@@ -137,6 +146,61 @@ function ParentPanel({
   // 录音不自动清，所以把当前占用摆出来，家长自己判断要不要清
   const refreshFootprint = () => void recordingsFootprint().then(setFootprint)
   useEffect(refreshFootprint, [])
+
+  const refreshGroups = async () => setGroups(await listGroups())
+  useEffect(() => {
+    void refreshGroups()
+    void loadGenGroups().then(setPicked)
+  }, [])
+
+  const toggleGroup = (g: string) => {
+    const next = picked.includes(g) ? picked.filter((x) => x !== g) : [...picked, g]
+    setPicked(next)
+    void saveGenGroups(next)
+  }
+
+  /**
+   * 生成今天的计划。中英文各一本新书 + 一本旧书，只从勾上的分组里抽。
+   *
+   * 今天已经有进度时必须先清 —— 生成出来的 piece id 是重编的（p1…p4），
+   * 直接覆盖会让旧进度串到别的书上（孩子会看到没读过的书顶着「读完」印章）。
+   */
+  const generate = async () => {
+    setErr(null)
+    setNotice(null)
+    if (!picked.length) return setErr('先勾选至少一个分组')
+    const prog = await loadProgress(date)
+    if (Object.keys(prog).length) {
+      if (
+        !window.confirm(
+          `${date} 已经有阅读记录了。\n\n重新生成会换掉今天的书，旧进度会对不上（孩子可能看到没读过的书显示「读完」）。\n\n要清掉今天的进度、星星和录音再生成吗？`,
+        )
+      )
+        return
+      await clearDay(date)
+      setStars({})
+      setRecs({})
+    }
+    setGenerating(true)
+    try {
+      const { picks, empty } = await generateDayPlan(date, picked)
+      if (!picks.length) {
+        setErr('勾选的分组里一本书都没有')
+        return
+      }
+      const line = picks.map((k) => `${k.kind === '新书' ? '新' : '旧'}·${k.title}`).join('，')
+      setNotice(
+        `已生成 ${date} 的计划：${line}` +
+          (empty.length ? `（${empty.join('、')}没有可选的书，跳过了）` : ''),
+      )
+      await refreshGroups()
+      onDataChanged()
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : '生成失败')
+    } finally {
+      setGenerating(false)
+    }
+  }
 
   useEffect(() => {
     if (!manifest) return
@@ -181,19 +245,29 @@ function ParentPanel({
     setNotice(null)
     try {
       const m = await importPack(f)
+
+      // 系列包：一整套书入库，不绑定任何一天。没有进度要处理，直接进书架
+      if (m.series) {
+        setNotice(`已入库系列《${m.series}》，共 ${m.pieces.length} 本。可以在下面「生成今天的计划」里勾选`)
+        await refreshGroups()
+        onDataChanged()
+        return
+      }
+
       let extra = ''
+      const day = m.date!
 
       // 同一天重新导入（改错、补页）时旧进度还在，孩子会被锁在
       // 「已完成」上读不到新版本 —— 问一下要不要一起清掉
-      const prog = await loadProgress(m.date)
+      const prog = await loadProgress(day)
       if (Object.keys(prog).length) {
         if (
           window.confirm(
-            `${m.date} 已经有阅读记录了。\n\n换了新的任务包，旧进度会让孩子看到「读完」印章、读不到新内容。\n\n要清掉这天的进度、星星和录音吗？`,
+            `${day} 已经有阅读记录了。\n\n换了新的任务包，旧进度会让孩子看到「读完」印章、读不到新内容。\n\n要清掉这天的进度、星星和录音吗？`,
           )
         ) {
-          await clearDay(m.date)
-          if (m.date === date) {
+          await clearDay(day)
+          if (day === date) {
             setStars({})
             setRecs({})
           }
@@ -204,9 +278,9 @@ function ParentPanel({
       }
 
       setNotice(
-        m.date === date
-          ? `已导入 ${m.date} 的任务，共 ${m.pieces.length} 篇${extra}`
-          : `已存好 ${m.date} 的任务，但今天是 ${date}，孩子端要到那天才看得到${extra}`,
+        day === date
+          ? `已导入 ${day} 的任务，共 ${m.pieces.length} 篇${extra}`
+          : `已存好 ${day} 的任务，但今天是 ${date}，孩子端要到那天才看得到${extra}`,
       )
       onDataChanged()
     } catch (e) {
@@ -321,11 +395,67 @@ function ParentPanel({
           )
         })}
 
+        {/* 生成当日计划：中英文各一本新书 + 一本旧书，只从勾上的分组里抽。
+            分组粒度是「系列或分级」—— 孩子觉得 RAZ B 太简单，不勾它就行 */}
+        <section className="mt-4 rounded-xl border border-[#eae5dd] bg-white p-3">
+          <h3 className="text-[11px] font-bold tracking-wide text-mute">生成今天的计划</h3>
+          <p className="mt-1 text-[11px] leading-relaxed text-mute">
+            中文、英文各抽一本新书 + 一本旧书。新书挑没读过的里面最简单的，
+            旧书从最久没读的里面随机。某一边没有新书了，就抽两本旧书（一易一难）。
+          </p>
+
+          {groups === null && <p className="mt-2 text-[11px] text-mute">读取书库中…</p>}
+          {groups?.length === 0 && (
+            <p className="mt-2 text-[11px] text-mute">书库还是空的，先导入任务包或系列包</p>
+          )}
+
+          {(['zh', 'en'] as const).map((lang) => {
+            const list = groups?.filter((g) => g.lang === lang) ?? []
+            if (!list.length) return null
+            return (
+              <div key={lang} className="mt-2.5">
+                <div className="text-[11px] font-bold text-[#7d7467]">
+                  {lang === 'zh' ? '中文' : '英文'}
+                </div>
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  {list.map((g) => {
+                    const on = picked.includes(g.group)
+                    return (
+                      <button
+                        key={g.group}
+                        onClick={() => toggleGroup(g.group)}
+                        className={`rounded-lg border px-2 py-1 text-left text-[11px] leading-tight ${
+                          on
+                            ? 'border-water bg-water/10 text-[#1f6f96]'
+                            : 'border-[#e4ded4] bg-white text-mute'
+                        }`}
+                      >
+                        <span className="font-bold">{on ? '✓ ' : ''}{g.group}</span>
+                        <span className="ml-1 opacity-70">
+                          {g.total} 本 · 新 {g.unread}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
+
+          <button
+            disabled={generating || !picked.length}
+            onClick={() => void generate()}
+            className="tap mt-3 w-full rounded-xl bg-water py-2.5 text-[13px] font-bold text-white disabled:bg-[#ddd6ca]"
+          >
+            {generating ? '生成中…' : `生成 ${date} 的计划`}
+          </button>
+        </section>
+
         <button
           onClick={() => fileRef.current?.click()}
           className="w-full rounded-xl border border-dashed border-[#cfc7bb] bg-white py-3 text-[12px] text-mute"
         >
-          ＋ 导入任务包（.rdpkg）
+          ＋ 导入 .rdpkg（当日任务包 或 整套系列）
         </button>
         {/* accept 不能只写 .rdpkg：安卓的文档选择器按 MIME 过滤，未知扩展名
             没有对应 MIME，文件会被灰掉、根本选不中。放开成任意类型，选错了

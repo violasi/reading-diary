@@ -2,20 +2,25 @@
  * 本地存储。全部在 IndexedDB，没有任何后端。
  *
  * 键的约定：
- *   pack:<date>       任务包 { manifest, files: 路径 → blob 哈希 }
+ *   pack:<date>       当日任务包 { manifest, files: 路径 → blob 哈希 }
+ *   pack:lib/<系列名>  系列包：一次性导入的一整套书，不绑定任何一天。
+ *                     **必须也用 pack: 前缀** —— gcBlobs 是扫所有 pack: 开头的键
+ *                     来算引用的，换个前缀它认不出来，会把整套系列的素材当孤儿删光
  *   blob:<sha256>     按内容寻址的图/音频。同一本书连着几天布置，只存一份
  *   progress:<date>   当天各篇进度
  *   rec:<date>:<pid>  孩子交的录音 Blob
  *   stars:<date>      家长打的星
  *   done:<date>       当天至少读完一本 —— 打卡章。注意日历不只看这个键，
  *                     loadDoneDates 还会扫 progress: 取并集（见那里的说明）
+ *   genGroups         家长上次勾选的「从哪些分组抽书」
  *   settings          PIN、孩子名字
  *   schemaVersion     数据结构版本，升级时用来判断要不要迁移
- *   dates             有任务包的日期列表（升序），日历和图书馆都用
+ *   dates             有当日任务包的日期列表（升序），日历和图书馆都用
+ *   series            已导入的系列列表（存的是 lib/<系列名> 这种槽位名）
  */
 import { get, set, del, keys, getMany, setMany, delMany } from 'idb-keyval'
 import type { DayProgress, PackManifest, PackPiece, Settings } from '../types'
-import { emptyProgress, isPieceDone } from '../types'
+import { emptyProgress, groupOf, isPieceDone, langOf } from '../types'
 
 export interface StoredPack {
   manifest: PackManifest
@@ -153,8 +158,26 @@ async function resolveFiles(files: Record<string, Blob | string>): Promise<Recor
 }
 
 // ---- 任务包 ----
+/**
+ * 系列包在 pack: 命名空间里的槽位前缀。
+ *
+ * 为什么不另开一个 `lib:` 前缀：gcBlobs 认的是 `pack:` 开头的键，
+ * 别的前缀它扫不到，整套系列的图和音频会被当成孤儿删掉 —— 书还留在书架上，
+ * 点开却全是空白页。沿用 pack: 前缀，那个最危险的函数一行都不用动。
+ */
+const SERIES_PREFIX = 'lib/'
+export const seriesSlot = (name: string) => SERIES_PREFIX + name.trim()
+export const isSeriesSlot = (slot: string) => slot.startsWith(SERIES_PREFIX)
+export const seriesName = (slot: string) => slot.slice(SERIES_PREFIX.length)
+export const listSeriesSlots = async () => (await get<string[]>('series')) ?? []
+/** 库里所有包的槽位：当日包（日期）+ 系列包（lib/…） */
+const allSlots = async () => [...(await listPackDates()), ...(await listSeriesSlots())]
+
 export const savePack = async (pack: StoredPack) => {
-  const date = pack.manifest.date
+  const { date, series } = pack.manifest
+  if (!date && !series) throw new Error('任务包既没有日期也没有系列名')
+  // 系列包不进 dates 索引 —— 进了的话日历上会冒出个假日子
+  const slot = series ? seriesSlot(series) : date!
 
   // 先算哈希、只写库里还没有的 blob，再写 pack 记录。
   // 顺序很重要：pack 记录一旦落下，它引用的 blob 必须都已经在了
@@ -176,25 +199,27 @@ export const savePack = async (pack: StoredPack) => {
   }
   // pack 记录和 dates 索引必须一个事务写完：分两次写的话中间被杀会留下
   // 「包在库里但不在索引里」的状态
-  const all = new Set(await listPackDates())
-  all.add(date)
+  const indexKey = series ? 'series' : 'dates'
+  const all = new Set(series ? await listSeriesSlots() : await listPackDates())
+  all.add(slot)
   await setMany([
-    [`pack:${date}`, raw],
-    ['dates', [...all].sort()],
+    [`pack:${slot}`, raw],
+    [indexKey, [...all].sort()],
   ])
 
-  // 同日期重新导入会顶掉旧包，旧包独有的 blob 就没人引用了
+  // 同槽位重新导入会顶掉旧包，旧包独有的 blob 就没人引用了
   await gcBlobs()
 }
 
-export const loadPack = async (date: string): Promise<StoredPack | undefined> => {
-  const raw = await get<RawPack>(`pack:${date}`)
+/** slot 可以是日期（当日包），也可以是 lib/<系列名>（系列包） */
+export const loadPack = async (slot: string): Promise<StoredPack | undefined> => {
+  const raw = await get<RawPack>(`pack:${slot}`)
   if (!raw) return undefined
   return { manifest: raw.manifest, files: await resolveFiles(raw.files) }
 }
 
 /** 只要 manifest 和引用表，不读 blob 内容。书架列书用这个，快得多 */
-const loadPackMeta = (date: string) => get<RawPack>(`pack:${date}`)
+const loadPackMeta = (slot: string) => get<RawPack>(`pack:${slot}`)
 
 export const listPackDates = async () => (await get<string[]>('dates')) ?? []
 
@@ -429,7 +454,8 @@ export const listLibrary = async (): Promise<LibraryBook[]> => {
   const byTitle = new Map<string, LibraryBook>()
   // 先只读 manifest + 引用表（不含 blob 内容），把要哪些封面定下来
   const wanted: { key: string; title: string }[] = []
-  for (const date of await listPackDates()) {
+  // 系列包排在前面：日期包里的同名书更「近」，让它覆盖系列包那份
+  for (const date of await allSlots()) {
     // listPackDates 是升序，所以后面的（更新的）会自然覆盖前面的同名书
     const raw = await loadPackMeta(date)
     if (!raw) continue
@@ -451,9 +477,248 @@ export const listLibrary = async (): Promise<LibraryBook[]> => {
     })
   }
   // Map.set 覆盖已有键时保留的是「初次插入」的位置，所以不能靠插入顺序，
-  // 必须显式按日期倒排才能让最近读的排在前面
-  return [...byTitle.values()].sort((a, b) => b.date.localeCompare(a.date))
+  // 必须显式按日期倒排才能让最近读的排在前面。
+  // 系列包没有日期（槽位是 lib/…），按字典序会压在最前面，所以单独排到后面去
+  return [...byTitle.values()].sort((a, b) => {
+    const sa = isSeriesSlot(a.date), sb = isSeriesSlot(b.date)
+    if (sa !== sb) return sa ? 1 : -1
+    return b.date.localeCompare(a.date)
+  })
 }
+
+
+// ---- 书目总表 & 当日计划生成 ----
+/**
+ * 一本书在总表里的样子。**身份是书名**（和书架的去重规则一致）。
+ */
+export interface CatalogEntry {
+  title: string
+  lang: 'zh' | 'en'
+  /** 家长勾选的粒度：系列优先，回退到分级（见 types.ts 的 groupOf） */
+  group: string
+  level?: string
+  seq?: number
+  /** 内容在哪个包里（日期或 lib/<系列名>），以及在那个包里的 piece id */
+  slot: string
+  pieceId: string
+  /** 最近一次**读完**的日期。undefined = 还没读过 = 新书 */
+  lastRead?: string
+}
+
+/**
+ * 难度序号，越小越简单，给「新书从易到难」排序用。
+ *
+ * ⚠ 这是对已有数据的**推断**，不是权威顺序：
+ *   · 系列包带 seq 的，直接用 seq —— 这个是准的
+ *   · 老包只有 level 字符串，从里面抠：「… Stage 3」「… Level 4」取数字，
+ *     「RAZ Level B」取字母序
+ *   · 同一分级内部（比如 39 本 RAZ B）老包里没有任何顺序信息，只能并列，
+ *     再按书名稳定排序
+ */
+const rankOf = (e: { seq?: number; level?: string }): number => {
+  if (typeof e.seq === 'number') return e.seq
+  const lv = e.level ?? ''
+  const num = lv.match(/(?:Stage|Level)\s*(\d+)/i)
+  if (num) return Number(num[1]) * 100
+  const letter = lv.match(/Level\s*([A-Za-z])\b/)
+  if (letter) return (letter[1].toUpperCase().charCodeAt(0) - 64) * 100
+  return 0
+}
+
+/**
+ * 全部已知的书 + 读没读过。
+ *
+ * 读没读过只认**当日任务包的进度**（系列包不绑定日期，本身没有进度）。
+ */
+export const buildCatalogue = async (): Promise<CatalogEntry[]> => {
+  const dates = await listPackDates()
+  const seriesSlots = await listSeriesSlots()
+  const byTitle = new Map<string, CatalogEntry>()
+  /** slot → pieceId → 书名，回头把进度映射回书名要用 */
+  const idToTitle = new Map<string, Map<string, string>>()
+  /** 系列包给的 group/seq 更权威（它明确带了 series/seq），最后覆盖回去 */
+  const fromSeries = new Map<string, { group: string; seq?: number }>()
+
+  for (const slot of [...seriesSlots, ...dates]) {
+    const raw = await loadPackMeta(slot)
+    if (!raw) continue
+    const m = new Map<string, string>()
+    for (const piece of raw.manifest.pieces) {
+      const title = piece.title.trim()
+      if (!title) continue
+      m.set(piece.id, title)
+      if (isSeriesSlot(slot)) fromSeries.set(title, { group: groupOf(piece), seq: piece.seq })
+      byTitle.set(title, {
+        title,
+        lang: langOf(piece),
+        group: groupOf(piece),
+        level: piece.level,
+        seq: piece.seq,
+        // 后面的（日期更新的）会自然覆盖前面的，所以内容取最近那份
+        slot,
+        pieceId: piece.id,
+        lastRead: byTitle.get(title)?.lastRead,
+      })
+    }
+    idToTitle.set(slot, m)
+  }
+
+  for (const [title, meta] of fromSeries) {
+    const e = byTitle.get(title)
+    if (!e) continue
+    e.group = meta.group
+    if (e.seq === undefined) e.seq = meta.seq
+  }
+
+  for (const date of dates) {
+    const m = idToTitle.get(date)
+    if (!m) continue
+    const prog = await loadProgress(date)
+    for (const [pid, p] of Object.entries(prog)) {
+      if (!isPieceDone(p)) continue
+      const title = m.get(pid)
+      const e = title ? byTitle.get(title) : undefined
+      if (e && (!e.lastRead || date > e.lastRead)) e.lastRead = date
+    }
+  }
+  return [...byTitle.values()]
+}
+
+/** 书库里有哪些分组可选，以及每组多少本、读过几本 */
+export interface GroupStat {
+  group: string
+  lang: 'zh' | 'en'
+  total: number
+  unread: number
+}
+export const listGroups = async (cat?: CatalogEntry[]): Promise<GroupStat[]> => {
+  const entries = cat ?? (await buildCatalogue())
+  const m = new Map<string, GroupStat>()
+  for (const e of entries) {
+    const k = `${e.lang}\u0000${e.group}`
+    const g = m.get(k) ?? { group: e.group, lang: e.lang, total: 0, unread: 0 }
+    g.total++
+    if (!e.lastRead) g.unread++
+    m.set(k, g)
+  }
+  return [...m.values()].sort((a, b) => a.lang.localeCompare(b.lang) || a.group.localeCompare(b.group))
+}
+
+/**
+ * 旧书从「最久没读的那几本」里随机一本。
+ *
+ * 候选窗口 = 最久没读的前三分之一，但**至少 3 本**、至多 6 本。
+ * 下限 3 是必须的：早期旧书才两三本时，按 ⌈n/3⌉ 算窗口会塌成 1，
+ * 于是每天抽到的都是同一本 —— 正是要避免的。窗口不超过书数。
+ */
+const pickOldest = (olds: CatalogEntry[]): CatalogEntry | undefined => {
+  if (!olds.length) return undefined
+  const n = Math.min(olds.length, 6, Math.max(3, Math.ceil(olds.length / 3)))
+  return olds[Math.floor(Math.random() * n)]
+}
+
+export interface PlanPick {
+  lang: 'zh' | 'en'
+  kind: '新书' | '旧书'
+  title: string
+  group: string
+}
+
+/**
+ * 生成当日计划：中文、英文各一本新书 + 一本旧书。
+ *
+ * **不复制任何字节** —— blob 是按内容寻址的，生成出来的包只是一份新的 manifest，
+ * 指向已经存在的 blob。所以下游（首页、阅读页、录音、打卡、书架）一行都不用改。
+ *
+ * 某一语种没有新书了，就挑两本旧书，一易一难。
+ * 调用方要先处理「今天已经有进度」的情况：piece id 是重新编的（p1…p4），
+ * 直接覆盖会让旧进度串到别的书上。
+ */
+export const generateDayPlan = async (
+  date: string,
+  groups: string[],
+): Promise<{ picks: PlanPick[]; empty: string[] }> => {
+  const cat = await buildCatalogue()
+  const allow = new Set(groups)
+  const chosen: CatalogEntry[] = []
+  const picks: PlanPick[] = []
+  const empty: string[] = []
+
+  for (const lang of ['zh', 'en'] as const) {
+    const label = lang === 'zh' ? '中文' : '英文'
+    const pool = cat.filter((e) => e.lang === lang && allow.has(e.group))
+    if (!pool.length) {
+      empty.push(label)
+      continue
+    }
+    const take = (e: CatalogEntry | undefined, kind: PlanPick['kind']) => {
+      if (!e || chosen.includes(e)) return
+      chosen.push(e)
+      picks.push({ lang, kind, title: e.title, group: e.group })
+    }
+    const byRank = (a: CatalogEntry, b: CatalogEntry) =>
+      rankOf(a) - rankOf(b) || a.title.localeCompare(b.title)
+    const news = pool.filter((e) => !e.lastRead).sort(byRank)
+    const olds = pool.filter((e) => e.lastRead).sort((a, b) => a.lastRead!.localeCompare(b.lastRead!))
+
+    if (news.length) {
+      take(news[0], '新书') // 还没读过的里面最简单的那本
+      take(pickOldest(olds), '旧书')
+    } else {
+      // 新书读完了：一易一难
+      const sorted = [...olds].sort(byRank)
+      take(sorted[0], '旧书')
+      take(sorted[sorted.length - 1], '旧书')
+    }
+  }
+
+  // 组装 manifest：piece 直接复用源包里那一份，只把文件路径按新 id 重命名，
+  // 指向同一批已存在的 blob
+  const files: Record<string, Blob | string> = {}
+  const pieces: PackPiece[] = []
+  for (const [i, e] of chosen.entries()) {
+    const raw = await loadPackMeta(e.slot)
+    const src = raw?.manifest.pieces.find((pp) => pp.id === e.pieceId)
+    if (!raw || !src) continue
+    const id = `p${i + 1}`
+    const ns = (path?: string | null): string | null => {
+      if (!path) return null
+      const ref = raw.files[path]
+      if (ref === undefined) return null
+      const np = `${id}/${path}`
+      files[np] = ref // 可能是哈希（新包）也可能是 Blob（v1 老包），两种都原样搬
+      return np
+    }
+    pieces.push({
+      ...src,
+      id,
+      cover: ns(src.cover) ?? undefined,
+      listen: { ...(src.listen ?? {}), audio: ns(src.listen?.audio) },
+      pages: src.pages.map((pg) => ({ ...pg, image: ns(pg.image) ?? pg.image, audio: ns(pg.audio) })),
+    })
+  }
+
+  const manifest: PackManifest = {
+    format: 'reading-diary-pack',
+    version: 1,
+    date,
+    note: '家长在 App 里生成的当日计划',
+    pieces,
+  }
+  const all = new Set(await listPackDates())
+  all.add(date)
+  await setMany([
+    [`pack:${date}`, { manifest, files } satisfies RawPack],
+    ['dates', [...all].sort()],
+  ])
+  // 覆盖掉的旧包如果有独占素材，这里回收
+  await gcBlobs()
+  return { picks, empty }
+}
+
+/** 家长上次勾选的分组，下次生成默认沿用 —— 免得每天重勾 */
+export const loadGenGroups = async () => (await get<string[]>('genGroups')) ?? []
+export const saveGenGroups = (g: string[]) => set('genGroups', g)
 
 // ---- 设置 ----
 const DEFAULT_SETTINGS: Settings = { pin: '123', childName: '' }

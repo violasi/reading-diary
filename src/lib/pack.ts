@@ -23,7 +23,11 @@ function validate(m: unknown): PackManifest {
   const man = m as PackManifest
   if (!man || man.format !== 'reading-diary-pack')
     throw new PackError('这不是「阅读打卡日记」的任务包')
-  if (!man.date) throw new PackError('任务包里没有日期')
+  // 两种包：当日任务包带 date，系列包带 series（一次性导入一整套，不绑定哪天）
+  if (!man.date && !man.series)
+    throw new PackError('任务包里既没有日期也没有系列名')
+  if (man.date && man.series)
+    throw new PackError('任务包不能同时带日期和系列名 —— 要么按天布置，要么整套入库')
   if (!Array.isArray(man.pieces) || man.pieces.length === 0)
     throw new PackError('任务包里没有任何篇目')
   for (const p of man.pieces) {

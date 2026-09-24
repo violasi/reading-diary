@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 """
-按 plan.json 组装 .rdpkg 任务包。
+按 plan.json 组装 .rdpkg 包。
+
+两种包：
+  · **当日任务包** —— plan 里写 "date"，孩子端那天才看得到。
+  · **系列包** —— plan 里写 "series" 而不是 "date"，一次把一整套书入库，
+    不绑定任何一天。入库后出现在书架里，并成为家长页「生成今天的计划」
+    可勾选的一个分组。每篇会自动带上 seq（在 plan 里的顺序，1 起），
+    生成计划「从易到难」靠它排序 —— 所以 **plan 里的顺序要按难度从易到难写**。
+  两者互斥：同时写 date 和 series，App 导入时会拒绝。
 
 只做机械活：按 plan 指定的页码取图和音频、写 manifest、打 zip。
 无第三方依赖（页面图在 extract_pdf.py 里已经压好，这里不再动）。
@@ -90,6 +98,11 @@ def build_piece(piece: dict, stage: Path, warnings: list):
         "listen": listen,
         "pages": out_pages,
     }
+    # 系列包才有：同系列内的难度序号，越小越简单
+    if piece.get("seq") is not None:
+        out["seq"] = piece["seq"]
+    if piece.get("series"):
+        out["series"] = piece["series"]
     if piece.get("cover_page"):
         cp = piece["cover_page"]
         if cp in by_page:
@@ -110,7 +123,17 @@ def main():
     out_dir = Path(sys.argv[2])
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    stage = out_dir / f".stage-{plan['date']}"
+    series = plan.get("series")
+    if bool(series) == bool(plan.get("date")):
+        raise SystemExit("plan 里要么写 date（当日任务包），要么写 series（系列包），二选一")
+    # 系列包：按 plan 里的顺序自动编 seq，并把系列名挂到每一篇上
+    if series:
+        for i, pc in enumerate(plan["pieces"], start=1):
+            pc.setdefault("seq", i)
+            pc.setdefault("series", series)
+    slug = series if series else plan["date"]
+
+    stage = out_dir / f".stage-{slug}"
     if stage.exists():
         shutil.rmtree(stage)
     stage.mkdir(parents=True)
@@ -121,17 +144,20 @@ def main():
     manifest = {
         "format": "reading-diary-pack",
         "version": 1,
-        "date": plan["date"],
         "child": plan.get("child", ""),
         "pieces": pieces,
     }
+    if series:
+        manifest["series"] = series
+    else:
+        manifest["date"] = plan["date"]
     if plan.get("note"):
         manifest["note"] = plan["note"]
     (stage / "manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
     )
 
-    pack = out_dir / f"{plan['date']}.rdpkg"
+    pack = out_dir / f"{slug}.rdpkg"
     with zipfile.ZipFile(pack, "w", zipfile.ZIP_DEFLATED) as z:
         for f in sorted(stage.rglob("*")):
             if f.is_file():
