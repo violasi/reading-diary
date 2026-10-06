@@ -16,6 +16,17 @@
     页号规则：PDF 第 N 页 → 左半 2N-1、右半 2N（**不重排**，
     这样 probe.json 的页号永远能反推回原 PDF 的哪一页哪半边）。
 
+  · --layout=appshot —— **阅读 App 的截屏**，不是实体书扫描。整页是一张截图：
+    中间插图、下面一行句子，四周压着 App 的界面（积分角标、翻页箭头、录音按钮、
+    进度条）。这些 UI 必须去掉，否则孩子会去点，而且难看。
+    这个模式把插图带和文字带分别取出来、清掉各自的 UI、再上下拼起来：
+      插图带 y[0, ART_BOT]   —— 右上角的积分角标、左上角被截断的按钮，
+                                用紧邻下方的等高像素翻转贴上去补（比涂白自然得多）
+      文字带 y[TXT_TOP, TXT_BOT] —— 左右裁掉 ‹ › 箭头和录音按钮
+      再往下的页码和进度条整条丢掉
+    上下边界是从「整行全白的横缝」量出来的，同一个 App 导出的页面位置一致，
+    所以写成常量；换一批素材要重新量（量法见 APPSHOT_* 注释）。
+
   · --layout=picturebook —— 亲子阅读绘本专用。有些绘本 PDF 是「一张高清跨页扫图
     ＋ 一段转录文字」拼在 A4 版面上，四周大片空白、还印着大号页码。整页缩放渲染
     会把高清插图压小、文字也跟着糊；更糟的是这类 PDF 常用子集化的 CJK 内嵌字体
@@ -35,6 +46,7 @@
   uv run --with pymupdf python extract_pdf.py <跨页扫描.pdf> <out_dir> --split=spread --width=800
 """
 
+import io
 import json
 import re
 import subprocess
@@ -47,6 +59,20 @@ DEFAULT_WIDTH = 900  # 页面图宽度（px），平板上够清晰又不让包�
 AUDIO_EXTS = (".mp3", ".m4a", ".wav", ".mp4")
 
 # picturebook 模式的排版常数
+# --layout=appshot 的版面常数。
+# 怎么量出来的：把页面按 1:1 渲成位图，逐行算「近白像素占比」，
+# >97% 的连续行就是插图带和文字带之间、以及文字带和进度条之间的全白缝。
+# 这批素材（牛津树中国故事 12 本合集）量出来是 550~578 和 690~712，12 本完全一致。
+APPSHOT_ART_BOT = 550     # 插图带下边界
+APPSHOT_TXT_TOP = 578     # 文字带上边界
+APPSHOT_TXT_BOT = 690     # 文字带下边界（再往下是页码和进度条）
+APPSHOT_TXT_L = 0.123     # 文字带左裁（去掉 ‹）
+APPSHOT_TXT_R = 0.785     # 文字带右裁（去掉录音按钮和 ›）
+APPSHOT_BADGE_X = 0.725   # 右上角积分角标的左边界（占宽度比例）
+APPSHOT_BADGE_H = 98      # 角标高度
+APPSHOT_LEFTBTN_W = 0.03  # 左上角那个被截断的圆按钮
+APPSHOT_LEFTBTN_H = 82
+
 PB_PAD = 40           # 四边留白（按输出宽度 1400 校的）
 PB_FONT_DIVISOR = 26  # 字号 = 输出宽度 / 这个数：1400 → 54px，孩子一臂距离看得清
 PB_LINE_HEIGHT = 1.5
@@ -164,6 +190,73 @@ def render_picturebook_page(doc, page, out_path: Path, width: int) -> None:
     # dpi=96 时 1pt=1px，页面尺寸就是像素尺寸
     canvas.get_pixmap(dpi=96).save(out_path, jpg_quality=82)
     out.close()
+
+
+def _trim_margins(im, white=238, min_frac=0.02, pad=6):
+    """
+    裁掉四周的近白边，只裁外圈，图内部的白不动。全白就原样返回。
+
+    判据是「这一列/行有多少比例的深色像素」，**不是「有没有深色像素」** ——
+    截屏的边缘会混进 UI 的残片（被页面裁掉一半的按钮，整列就那么几个黑点），
+    按「有没有」判的话整幅图一点都裁不掉。
+    """
+    g = im.convert("L")
+    w, h = g.size
+    px = g.load()
+    xs = range(0, w, max(1, w // 300))
+    ys = range(0, h, max(1, h // 200))
+    ny, nx = len(list(ys)), len(list(xs))
+    cols = [x for x in xs if sum(1 for y in ys if px[x, y] < white) > ny * min_frac]
+    rows = [y for y in ys if sum(1 for x in xs if px[x, y] < white) > nx * min_frac]
+    if not cols or not rows:
+        return im
+    sx = max(1, w // 300)
+    box = (max(0, min(cols) - pad), max(0, min(rows) - pad),
+           min(w, max(cols) + sx + pad), min(h, max(rows) + pad))
+    return im.crop(box)
+
+
+def render_appshot_page(page, out_path: Path, width: int) -> None:
+    """阅读 App 截屏页：插图带 + 文字带，各自清掉 UI 后上下拼。见模块头 --layout=appshot。"""
+    from PIL import Image, ImageOps  # 只有这个模式要 Pillow，别拖累其它模式
+
+    pix = page.get_pixmap()  # 1:1，pt = px，常数才对得上
+    im = Image.open(io.BytesIO(pix.tobytes("png"))).convert("RGB")
+    w, h = im.size
+
+    # 封面不是截屏！这批合集里每本第一页是竖版封面（477x546），
+    # 套用下面那套按 1421x720 量出来的常数会把它裁烂。
+    # 不是截屏尺寸的页一律整页渲染。
+    if h < APPSHOT_TXT_BOT + 10 or w < h:
+        sc = width / w
+        im.resize((width, max(1, round(h * sc)))).save(out_path, quality=85)
+        return
+
+    art = im.crop((0, 0, w, APPSHOT_ART_BOT)).copy()
+    # 盖 UI 不涂白：把紧邻下方的等高像素上下翻转贴上去，纹理能接上，
+    # 涂白会在满幅插图上留一个很显眼的方缺口
+    for x0, x1, bh in (
+        (int(w * APPSHOT_BADGE_X), w, APPSHOT_BADGE_H),
+        (0, max(1, int(w * APPSHOT_LEFTBTN_W)), APPSHOT_LEFTBTN_H),
+    ):
+        patch = art.crop((x0, bh, x1, bh * 2))
+        art.paste(ImageOps.flip(patch), (x0, 0))
+
+    # 裁掉插图两侧的白边。截屏是 2:1 的宽幅，而不少页的插图其实接近方形、
+    # 两边一大片白 —— 不裁的话竖屏平板上图只占顶部三分之一，字小得没法读。
+    # 整幅铺满的页本来就没有白边，这一步对它们不起作用，正好。
+    art = _trim_margins(art)
+
+    txt = im.crop((int(w * APPSHOT_TXT_L), APPSHOT_TXT_TOP, int(w * APPSHOT_TXT_R), APPSHOT_TXT_BOT))
+    # 各自按**自己**的宽高比缩放。早先用页面宽算高度，裁完白边之后图就被横向拉扁了
+    # （art 已经窄了，高度却还按原页宽的比例算）。
+    art = art.resize((width, max(1, round(art.height * width / art.width))))
+    ts = min(1.0, width / txt.width)
+    txt = txt.resize((max(1, round(txt.width * ts)), max(1, round(txt.height * ts))))
+    out = Image.new("RGB", (width, art.height + txt.height + 14), "white")
+    out.paste(art, (0, 0))
+    out.paste(txt, ((width - txt.width) // 2, art.height + 10))
+    out.save(out_path, quality=85)
 
 
 def utf16_hex_to_str(s: str) -> str:
@@ -318,7 +411,9 @@ def main():
     pages = []
     for pno, page in enumerate(doc, start=1):
         img_rel = f"pages/p{pno:02d}.jpg"
-        if layout == "picturebook":
+        if layout == "appshot":
+            render_appshot_page(page, out_dir / img_rel, width)
+        elif layout == "picturebook":
             render_picturebook_page(doc, page, out_dir / img_rel, width)
         else:
             scale = width / page.rect.width

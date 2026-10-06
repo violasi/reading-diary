@@ -25,6 +25,7 @@ C.PDF/
 2.探索12  PDF版/
 3.成长15 PDF版/
 4.飞跃15  PDF版/
+牛津树中国故事/
 # 百度云下载中的半成品。**必须单独挡** —— 它们叫 xxx.pdf.baiduyun.p.downloading，
 # 结尾不是 .pdf，上面的后缀规则一个都盖不住，差点跟着 plan 一起提交上去。
 *.downloading
@@ -59,3 +60,7 @@ out/
 
 # tsc 增量构建缓存
 *.tsbuildinfo
+
+# Python 字节码缓存（调试时 import 脚本会生成）
+__pycache__/
+*.pyc
