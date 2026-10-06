@@ -13,6 +13,7 @@
  *   done:<date>       当天至少读完一本 —— 打卡章。注意日历不只看这个键，
  *                     loadDoneDates 还会扫 progress: 取并集（见那里的说明）
  *   genGroups         家长上次勾选的「从哪些分组抽书」
+ *   planModes         家长上次选的抽书方式（中/英各一个：1新1旧 / 2新 / 2旧）
  *   settings          PIN、孩子名字
  *   schemaVersion     数据结构版本，升级时用来判断要不要迁移
  *   dates             有当日任务包的日期列表（升序），日历和图书馆都用
@@ -624,6 +625,13 @@ export interface PlanPick {
   group: string
 }
 
+/** 每种语言抽书的方式。家长按孩子当天状态选 */
+export type PlanMode = '1新1旧' | '2新' | '2旧'
+export const PLAN_MODES: PlanMode[] = ['1新1旧', '2新', '2旧']
+export const loadPlanModes = async () =>
+  (await get<Record<'zh' | 'en', PlanMode>>('planModes')) ?? { zh: '1新1旧' as PlanMode, en: '1新1旧' as PlanMode }
+export const savePlanModes = (m: Record<'zh' | 'en', PlanMode>) => set('planModes', m)
+
 /**
  * 生成当日计划：中文、英文各一本新书 + 一本旧书。
  *
@@ -637,12 +645,14 @@ export interface PlanPick {
 export const generateDayPlan = async (
   date: string,
   groups: string[],
-): Promise<{ picks: PlanPick[]; empty: string[] }> => {
+  modes: Record<'zh' | 'en', PlanMode> = { zh: '1新1旧', en: '1新1旧' },
+): Promise<{ picks: PlanPick[]; empty: string[]; notes: string[] }> => {
   const cat = await buildCatalogue()
   const allow = new Set(groups)
   const chosen: CatalogEntry[] = []
   const picks: PlanPick[] = []
   const empty: string[] = []
+  const notes: string[] = []
 
   for (const lang of ['zh', 'en'] as const) {
     const label = lang === 'zh' ? '中文' : '英文'
@@ -652,24 +662,47 @@ export const generateDayPlan = async (
       continue
     }
     const take = (e: CatalogEntry | undefined, kind: PlanPick['kind']) => {
-      if (!e || chosen.includes(e)) return
+      if (!e || chosen.includes(e)) return false
       chosen.push(e)
       picks.push({ lang, kind, title: e.title, group: e.group })
+      return true
     }
     const byRank = (a: CatalogEntry, b: CatalogEntry) =>
       rankOf(a) - rankOf(b) || a.title.localeCompare(b.title)
     const news = pool.filter((e) => !e.lastRead).sort(byRank)
     const olds = pool.filter((e) => e.lastRead).sort((a, b) => a.lastRead!.localeCompare(b.lastRead!))
 
-    if (news.length) {
-      take(news[0], '新书') // 还没读过的里面最简单的那本
-      take(pickOldest(olds), '旧书')
-    } else {
-      // 新书读完了：一易一难
-      const sorted = [...olds].sort(byRank)
-      take(sorted[0], '旧书')
-      take(sorted[sorted.length - 1], '旧书')
+    const want = modes[lang] ?? '1新1旧'
+    const byRankOlds = [...olds].sort(byRank)
+    const easyOld = byRankOlds[0]
+    const hardOld = byRankOlds[byRankOlds.length - 1]
+
+    /**
+     * 候选按优先级排好，**一本一本取、每取一本就看够没够两本**。
+     * 早先是「先按方式抓两本，不够再整批补」，结果「2旧」只有 1 本旧书时
+     * 一次补进 2 本新书 —— 那天变成 3 本。配额只能逐本给。
+     * 前两项是家长选的方式，后面是兜底顺序。
+     */
+    const wish: [CatalogEntry | undefined, PlanPick['kind']][] =
+      want === '2新'
+        ? [[news[0], '新书'], [news[1], '新书'], [pickOldest(olds), '旧书'], [easyOld, '旧书'], [hardOld, '旧书']]
+        : want === '2旧'
+          ? [[easyOld, '旧书'], [hardOld, '旧书'], [pickOldest(olds), '旧书'], [news[0], '新书'], [news[1], '新书']]
+          : [[news[0], '新书'], [pickOldest(olds), '旧书'], [news[1], '新书'], [easyOld, '旧书'], [hardOld, '旧书']]
+
+    let n = 0
+    for (const [e, kind] of wish) {
+      if (n >= 2) break
+      if (take(e, kind)) n++
     }
+
+    // 没按选的方式凑齐就说明一下 —— 家长看得见才不会以为是 bug
+    const mine = picks.filter((k) => k.lang === lang)
+    const wantNew = want === '2新' ? 2 : want === '2旧' ? 0 : 1
+    const gotNew = mine.filter((k) => k.kind === '新书').length
+    if (mine.length < 2) notes.push(`${label}只凑出 ${mine.length} 本`)
+    else if (gotNew !== wantNew)
+      notes.push(`${label}「${want}」书不够，实际 ${gotNew} 新 ${2 - gotNew} 旧`)
   }
 
   // 组装 manifest：piece 直接复用源包里那一份，只把文件路径按新 id 重命名，
@@ -713,7 +746,7 @@ export const generateDayPlan = async (
   ])
   // 覆盖掉的旧包如果有独占素材，这里回收
   await gcBlobs()
-  return { picks, empty }
+  return { picks, empty, notes }
 }
 
 /** 家长上次勾选的分组，下次生成默认沿用 —— 免得每天重勾 */

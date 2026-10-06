@@ -6,6 +6,10 @@ import {
   getMigrationStatus,
   listGroups,
   loadGenGroups,
+  loadPlanModes,
+  savePlanModes,
+  PLAN_MODES,
+  type PlanMode,
   recordingsFootprint,
   saveGenGroups,
   clearAllProgress,
@@ -134,6 +138,7 @@ function ParentPanel({
   // 生成当日计划：家长勾选从哪些分组抽书（RAZ B 太简单就别勾）
   const [groups, setGroups] = useState<GroupStat[] | null>(null)
   const [picked, setPicked] = useState<string[]>([])
+  const [modes, setModes] = useState<Record<'zh' | 'en', PlanMode>>({ zh: '1新1旧', en: '1新1旧' })
   const [generating, setGenerating] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -151,7 +156,14 @@ function ParentPanel({
   useEffect(() => {
     void refreshGroups()
     void loadGenGroups().then(setPicked)
+    void loadPlanModes().then(setModes)
   }, [])
+
+  const setMode = (lang: 'zh' | 'en', m: PlanMode) => {
+    const next = { ...modes, [lang]: m }
+    setModes(next)
+    void savePlanModes(next)
+  }
 
   const toggleGroup = (g: string) => {
     const next = picked.includes(g) ? picked.filter((x) => x !== g) : [...picked, g]
@@ -183,7 +195,7 @@ function ParentPanel({
     }
     setGenerating(true)
     try {
-      const { picks, empty } = await generateDayPlan(date, picked)
+      const { picks, empty, notes } = await generateDayPlan(date, picked, modes)
       if (!picks.length) {
         setErr('勾选的分组里一本书都没有')
         return
@@ -191,7 +203,8 @@ function ParentPanel({
       const line = picks.map((k) => `${k.kind === '新书' ? '新' : '旧'}·${k.title}`).join('，')
       setNotice(
         `已生成 ${date} 的计划：${line}` +
-          (empty.length ? `（${empty.join('、')}没有可选的书，跳过了）` : ''),
+          (empty.length ? `（${empty.join('、')}没有可选的书，跳过了）` : '') +
+          (notes.length ? `（${notes.join('；')}）` : ''),
       )
       await refreshGroups()
       onDataChanged()
@@ -400,8 +413,8 @@ function ParentPanel({
         <section className="mt-4 rounded-xl border border-[#eae5dd] bg-white p-3">
           <h3 className="text-[11px] font-bold tracking-wide text-mute">生成今天的计划</h3>
           <p className="mt-1 text-[11px] leading-relaxed text-mute">
-            中文、英文各抽一本新书 + 一本旧书。新书挑没读过的里面最简单的，
-            旧书从最久没读的里面随机。某一边没有新书了，就抽两本旧书（一易一难）。
+            中文、英文各抽两本，方式各自可选。新书挑没读过的里面最简单的，
+            旧书从最久没读的里面随机（两本旧书时取一易一难）。书不够会自动补齐并说明。
           </p>
 
           {groups === null && <p className="mt-2 text-[11px] text-mute">读取书库中…</p>}
@@ -414,8 +427,24 @@ function ParentPanel({
             if (!list.length) return null
             return (
               <div key={lang} className="mt-2.5">
-                <div className="text-[11px] font-bold text-[#7d7467]">
-                  {lang === 'zh' ? '中文' : '英文'}
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-[#7d7467]">
+                    {lang === 'zh' ? '中文' : '英文'}
+                  </span>
+                  {/* 按孩子当天状态选：状态好来两本新的，状态一般就全读旧的 */}
+                  <span className="flex overflow-hidden rounded-lg border border-[#e4ded4]">
+                    {PLAN_MODES.map((m) => (
+                      <button
+                        key={m}
+                        onClick={() => setMode(lang, m)}
+                        className={`px-2 py-0.5 text-[11px] ${
+                          modes[lang] === m ? 'bg-water font-bold text-white' : 'bg-white text-mute'
+                        }`}
+                      >
+                        {m}
+                      </button>
+                    ))}
+                  </span>
                 </div>
                 <div className="mt-1 flex flex-wrap gap-1.5">
                   {list.map((g) => {
