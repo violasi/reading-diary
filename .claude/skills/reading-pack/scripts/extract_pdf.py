@@ -59,20 +59,6 @@ DEFAULT_WIDTH = 900  # 页面图宽度（px），平板上够清晰又不让包�
 AUDIO_EXTS = (".mp3", ".m4a", ".wav", ".mp4")
 
 # picturebook 模式的排版常数
-# --layout=appshot 的版面常数。
-# 怎么量出来的：把页面按 1:1 渲成位图，逐行算「近白像素占比」，
-# >97% 的连续行就是插图带和文字带之间、以及文字带和进度条之间的全白缝。
-# 这批素材（牛津树中国故事 12 本合集）量出来是 550~578 和 690~712，12 本完全一致。
-APPSHOT_ART_BOT = 550     # 插图带下边界
-APPSHOT_TXT_TOP = 578     # 文字带上边界
-APPSHOT_TXT_BOT = 690     # 文字带下边界（再往下是页码和进度条）
-APPSHOT_TXT_L = 0.123     # 文字带左裁（去掉 ‹）
-APPSHOT_TXT_R = 0.785     # 文字带右裁（去掉录音按钮和 ›）
-APPSHOT_BADGE_X = 0.725   # 右上角积分角标的左边界（占宽度比例）
-APPSHOT_BADGE_H = 98      # 角标高度
-APPSHOT_LEFTBTN_W = 0.03  # 左上角那个被截断的圆按钮
-APPSHOT_LEFTBTN_H = 82
-
 PB_PAD = 40           # 四边留白（按输出宽度 1400 校的）
 PB_FONT_DIVISOR = 26  # 字号 = 输出宽度 / 这个数：1400 → 54px，孩子一臂距离看得清
 PB_LINE_HEIGHT = 1.5
@@ -192,70 +178,177 @@ def render_picturebook_page(doc, page, out_path: Path, width: int) -> None:
     out.close()
 
 
-def _trim_margins(im, white=238, min_frac=0.02, pad=6):
-    """
-    裁掉四周的近白边，只裁外圈，图内部的白不动。全白就原样返回。
+# --layout=appshot：不再用任何写死的像素常数。
+# 这批素材（牛津树中国故事）同一套 App 有三种截法 —— 全屏 1421x720、
+# 带设备黑边和状态栏的 1234x720、低分辨率的 412x207。拿几页量出来的常数套全部，
+# 结果是整本整本地裁坏。所以**每页自己测**。
+APPSHOT_MIN_W = 1200   # 分析前先放大到这个宽度，低分辨率的那本才量得准
 
-    判据是「这一列/行有多少比例的深色像素」，**不是「有没有深色像素」** ——
-    截屏的边缘会混进 UI 的残片（被页面裁掉一半的按钮，整列就那么几个黑点），
-    按「有没有」判的话整幅图一点都裁不掉。
+
+def _trim_letterbox(im):
+    """
+    去掉四周整条的纯色边（有的截屏带设备黑边）。
+
+    ⚠ 判断「这一列是不是纯色」时**只看中间 60% 的行**，不看顶部和底部。
+    顶部有设备状态栏（时间、电量）横跨整个宽度，把它算进去的话最左那列就不「纯」，
+    trim 当场停住、黑边一点没去掉 —— 后面找插图边界时那一整列黑会被当成内容，
+    插图框直接从 x=0 起，状态栏就跟着进了成品图。行方向同理。
     """
     g = im.convert("L")
     w, h = g.size
     px = g.load()
-    xs = range(0, w, max(1, w // 300))
-    ys = range(0, h, max(1, h // 200))
-    ny, nx = len(list(ys)), len(list(xs))
-    cols = [x for x in xs if sum(1 for y in ys if px[x, y] < white) > ny * min_frac]
-    rows = [y for y in ys if sum(1 for x in xs if px[x, y] < white) > nx * min_frac]
-    if not cols or not rows:
-        return im
-    sx = max(1, w // 300)
-    box = (max(0, min(cols) - pad), max(0, min(rows) - pad),
-           min(w, max(cols) + sx + pad), min(h, max(rows) + pad))
-    return im.crop(box)
+    xs = range(int(w * 0.2), int(w * 0.8), max(1, w // 120))
+    ys = range(int(h * 0.2), int(h * 0.8), max(1, h // 120))
+
+    # 只裁「均匀且**发暗**」的边 —— 那才是设备黑边。
+    # 白边不能裁：插图两侧的白底是版面的一部分，而且文字常常比插图更宽，
+    # 把白边裁掉会连句子的头尾一起切没。
+    def dark_uniform(vals):
+        return max(vals) - min(vals) < 18 and sum(vals) / len(vals) < 60
+
+    uni_row = lambda y: dark_uniform([px[x, y] for x in xs])
+    uni_col = lambda x: dark_uniform([px[x, y] for y in ys])
+    t = 0
+    while t < h // 3 and uni_row(t):
+        t += 1
+    b = h - 1
+    while b > h * 2 // 3 and uni_row(b):
+        b -= 1
+    l = 0
+    while l < w // 3 and uni_col(l):
+        l += 1
+    r = w - 1
+    while r > w * 2 // 3 and uni_col(r):
+        r -= 1
+    return im.crop((l, t, r + 1, b + 1))
+
+
+def _white_gaps(im, thr=0.97, minrun=3):
+    """整行近白的横缝。插图带和文字带、文字带和进度条之间各有一条。"""
+    g = im.convert("L")
+    w, h = g.size
+    px = g.load()
+    xs = list(range(0, w, max(1, w // 200)))
+    rows = [y for y in range(h) if sum(1 for x in xs if px[x, y] > 232) / len(xs) > thr]
+    segs, cur = [], None
+    for y in rows:
+        if cur and y == cur[1] + 1:
+            cur[1] = y
+        else:
+            if cur:
+                segs.append(tuple(cur))
+            cur = [y, y]
+    if cur:
+        segs.append(tuple(cur))
+    return [t for t in segs if t[1] - t[0] >= minrun]
+
+
+def _art_bbox(im, y0, y1):
+    """
+    插图本身的边界。按列/行统计「**非白**像素占比」，取超过峰值 25% 的区间。
+
+    判据是非白而不是「彩色」—— 柔和色调的插图（淡黄天空、淡绿草地）达不到
+    彩色阈值，结果整页只剩顶部一条饱和色边被当成内容，插图全丢了。
+    非白同时还能排掉设备状态栏（稀疏小字，整行占比很低）和积分角标（白底胶囊）。
+    """
+    g = im.convert("L")
+    w, _ = g.size
+    px = g.load()
+    sy = max(1, (y1 - y0) // 140)
+    sx = max(1, w // 340)
+    ys = list(range(y0, y1, sy))
+    xs = list(range(0, w, sx))
+    colc = [sum(1 for y in ys if px[x, y] < 238) for x in xs]
+    rowc = [sum(1 for x in xs if px[x, y] < 238) for y in ys]
+    if not max(colc, default=0) or not max(rowc, default=0):
+        return None
+    # 取**最长的连续段**，不是首尾两个命中位置。
+    # 截屏边缘常有一条抗锯齿的灰线（黑边和白底之间），它每行都「非白」、
+    # 直接成了峰值，按首尾取的话插图框会从 x=0 起，把状态栏一起框进来。
+    def longest_run(vals, pos, thr):
+        best = cur = None
+        for i, v in enumerate(vals):
+            if v > thr:
+                cur = [i, i] if cur is None else [cur[0], i]
+                if best is None or cur[1] - cur[0] > best[1] - best[0]:
+                    best = list(cur)
+            else:
+                cur = None
+        return None if best is None else (pos[best[0]], pos[best[1]])
+
+    rx = longest_run(colc, xs, max(colc) * 0.25)
+    ry = longest_run(rowc, ys, max(rowc) * 0.25)
+    if not rx or not ry:
+        return None
+    return (rx[0], ry[0], min(w, rx[1] + sx), ry[1] + sy)
+
+
+def _text_bounds(im, y0, y1):
+    """
+    文字带的左右边界：**按颜色找控件**，不按位置。
+    黄色圆形是录音键（文字右边界到它为止），左侧第一簇绿色是 ‹ 箭头（左边界从它之后起）。
+    早先用固定比例裁，长句子的尾巴被切掉了。
+    """
+    rgb = im.convert("RGB")
+    w, _ = rgb.size
+    px = rgb.load()
+    ys = list(range(y0, y1, max(1, (y1 - y0) // 40)))
+    yellow = [x for x in range(w) if any(px[x, y][0] > 215 and px[x, y][1] > 150 and px[x, y][2] < 120 for y in ys)]
+    green = [x for x in range(w) if any(
+        px[x, y][1] > 120 and px[x, y][0] < 170 and px[x, y][2] < 130 and px[x, y][1] - px[x, y][2] > 45
+        for y in ys)]
+    right = min(yellow) if yellow else w
+    left = 0
+    near = [x for x in green if x < w * 0.25]
+    if near:
+        run = [near[0]]
+        for x in near[1:]:
+            if x - run[-1] <= 12:
+                run.append(x)
+            else:
+                break
+        left = run[-1]
+    pad = max(4, w // 180)
+    return max(0, left + pad), max(left + pad + 1, right - pad)
 
 
 def render_appshot_page(page, out_path: Path, width: int) -> None:
-    """阅读 App 截屏页：插图带 + 文字带，各自清掉 UI 后上下拼。见模块头 --layout=appshot。"""
-    from PIL import Image, ImageOps  # 只有这个模式要 Pillow，别拖累其它模式
+    """阅读 App 截屏页：插图 + 句子，清掉界面后上下拼。见模块头 --layout=appshot。"""
+    from PIL import Image
 
-    pix = page.get_pixmap()  # 1:1，pt = px，常数才对得上
+    sc = max(1.0, APPSHOT_MIN_W / page.rect.width)
+    pix = page.get_pixmap(matrix=fitz.Matrix(sc, sc))
     im = Image.open(io.BytesIO(pix.tobytes("png"))).convert("RGB")
+    im = _trim_letterbox(im)
     w, h = im.size
 
-    # 封面不是截屏！这批合集里每本第一页是竖版封面（477x546），
-    # 套用下面那套按 1421x720 量出来的常数会把它裁烂。
-    # 不是截屏尺寸的页一律整页渲染。
-    if h < APPSHOT_TXT_BOT + 10 or w < h:
-        sc = width / w
-        im.resize((width, max(1, round(h * sc)))).save(out_path, quality=85)
+    gaps = _white_gaps(im)
+    # **只在页面中下部找分界线**。有些页顶部也有一条白缝（插图上方留白），
+    # 直接拿 gaps[0] 当分界的话，插图带会被算成 0~1 像素，整页出来是空白。
+    mid = [g for g in gaps if g[0] > h * 0.25]
+    # 找不到横缝就不是截屏版面（封面、或别的东西），整页原样输出
+    if not mid:
+        im.resize((width, max(1, round(h * width / w)))).save(out_path, quality=85)
         return
 
-    art = im.crop((0, 0, w, APPSHOT_ART_BOT)).copy()
-    # 盖 UI 不涂白：把紧邻下方的等高像素上下翻转贴上去，纹理能接上，
-    # 涂白会在满幅插图上留一个很显眼的方缺口
-    for x0, x1, bh in (
-        (int(w * APPSHOT_BADGE_X), w, APPSHOT_BADGE_H),
-        (0, max(1, int(w * APPSHOT_LEFTBTN_W)), APPSHOT_LEFTBTN_H),
-    ):
-        patch = art.crop((x0, bh, x1, bh * 2))
-        art.paste(ImageOps.flip(patch), (x0, 0))
+    art_band = (0, mid[0][0])
+    txt_band = (mid[0][1], mid[1][0] if len(mid) > 1 else h)
 
-    # 裁掉插图两侧的白边。截屏是 2:1 的宽幅，而不少页的插图其实接近方形、
-    # 两边一大片白 —— 不裁的话竖屏平板上图只占顶部三分之一，字小得没法读。
-    # 整幅铺满的页本来就没有白边，这一步对它们不起作用，正好。
-    art = _trim_margins(art)
+    bb = _art_bbox(im, *art_band)
+    # 兜底：插图框算崩了（太小）就退回整条插图带，宁可带点 UI 也别出空白页
+    if not bb or (bb[3] - bb[1]) < (art_band[1] - art_band[0]) * 0.3 or (bb[2] - bb[0]) < w * 0.2:
+        bb = (0, art_band[0], w, art_band[1])
+    art = im.crop(bb)
 
-    txt = im.crop((int(w * APPSHOT_TXT_L), APPSHOT_TXT_TOP, int(w * APPSHOT_TXT_R), APPSHOT_TXT_BOT))
-    # 各自按**自己**的宽高比缩放。早先用页面宽算高度，裁完白边之后图就被横向拉扁了
-    # （art 已经窄了，高度却还按原页宽的比例算）。
+    tl, tr = _text_bounds(im, *txt_band)
+    txt = im.crop((tl, txt_band[0], tr, txt_band[1]))
+
     art = art.resize((width, max(1, round(art.height * width / art.width))))
     ts = min(1.0, width / txt.width)
     txt = txt.resize((max(1, round(txt.width * ts)), max(1, round(txt.height * ts))))
-    out = Image.new("RGB", (width, art.height + txt.height + 14), "white")
+    out = Image.new("RGB", (width, art.height + txt.height + 16), "white")
     out.paste(art, (0, 0))
-    out.paste(txt, ((width - txt.width) // 2, art.height + 10))
+    out.paste(txt, ((width - txt.width) // 2, art.height + 12))
     out.save(out_path, quality=85)
 
 
