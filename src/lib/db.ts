@@ -7,6 +7,9 @@
  *                     **必须也用 pack: 前缀** —— gcBlobs 是扫所有 pack: 开头的键
  *                     来算引用的，换个前缀它认不出来，会把整套系列的素材当孤儿删光
  *   blob:<sha256>     按内容寻址的图/音频。同一本书连着几天布置，只存一份
+ *   thumb:<sha256>    封面缩略图（宽 160px，WebP）。书架显示的是 36~100px 的小图，
+ *                     用整页原图（一张约 150 KB）上百本要十几 MB，平板上卡好几秒。
+ *                     首次用到时生成并缓存；对应 blob 被回收时一起回收
  *   progress:<date>   当天各篇进度
  *   rec:<date>:<pid>  孩子交的录音 Blob
  *   stars:<date>      家长打的星
@@ -128,6 +131,36 @@ export const storageFootprint = async () => {
  * 所以图和音频按内容哈希存一份，任务包只存引用。
  */
 const blobKey = (hash: string) => `blob:${hash}`
+const THUMB_W = 160
+const thumbKey = (blobK: string) => `thumb:${blobK.slice(5)}`
+
+/**
+ * 生成封面缩略图。
+ *
+ * ⚠ **必须用 WebP 编码**。实测同一张图，在这个 WebView 上：
+ *     canvas → JPEG   约 1000 ms/张
+ *     canvas → WebP   约    9 ms/张   ← 快 110 倍
+ * OffscreenCanvas.convertToBlob 和 HTMLCanvas.toBlob 编 JPEG 都慢得离谱
+ * （9 张封面要 10 秒，书架直接卡死）。WebP 安卓 WebView 原生支持。
+ *
+ * 失败就返回 undefined，调用方退回用原图 —— 慢一点，但不能因为缩略图挂掉就没封面。
+ */
+async function makeThumb(blob: Blob): Promise<Blob | undefined> {
+  try {
+    const bmp = await createImageBitmap(blob)
+    const scale = Math.min(1, THUMB_W / bmp.width)
+    const w = Math.max(1, Math.round(bmp.width * scale))
+    const h = Math.max(1, Math.round(bmp.height * scale))
+    const canvas = new OffscreenCanvas(w, h)
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return undefined
+    ctx.drawImage(bmp, 0, 0, w, h)
+    bmp.close()
+    return await canvas.convertToBlob({ type: 'image/webp', quality: 0.82 })
+  } catch {
+    return undefined
+  }
+}
 
 async function sha256(blob: Blob): Promise<string> {
   const buf = await blob.arrayBuffer()
@@ -253,7 +286,11 @@ export const gcBlobs = async (): Promise<{ removed: number }> => {
     }
   }
   const orphans = ks.filter((k) => k.startsWith('blob:') && !referenced.has(k))
-  if (orphans.length) await delMany(orphans)
+  // 缩略图跟着它的原图走：原图没人引用了，缩略图也该走
+  const liveThumbs = new Set([...referenced].map(thumbKey))
+  const deadThumbs = ks.filter((k) => k.startsWith('thumb:') && !liveThumbs.has(k))
+  const dead = [...orphans, ...deadThumbs]
+  if (dead.length) await delMany(dead)
   return { removed: orphans.length }
 }
 
@@ -439,9 +476,16 @@ export const cleanupGradedRecordings = async (today = todayStr()) => {
 }
 
 export interface LibraryBook {
-  /** 这本书最近一次出现在哪天的任务包里 */
+  /** 这本书最近一次出现在哪天的任务包里（系列包是 lib/<系列名>） */
   date: string
   piece: PackPiece
+  /**
+   * 封面 blob 的键。**列表不预载封面** —— 封面是整页原图，一张约 150 KB，
+   * 上百本十几 MB；书架默认折叠，一次性全读会卡好几秒。
+   * 要显示时用 loadCovers 按需取（优先用缩略图）。
+   */
+  coverRef?: string
+  /** v1 老包里封面直接就是 Blob，没有哈希可引用 */
   cover?: Blob
 }
 
@@ -453,40 +497,92 @@ export interface LibraryBook {
  */
 export const listLibrary = async (): Promise<LibraryBook[]> => {
   const byTitle = new Map<string, LibraryBook>()
-  // 先只读 manifest + 引用表（不含 blob 内容），把要哪些封面定下来
-  const wanted: { key: string; title: string }[] = []
+  // 只读 manifest + 引用表，**不读封面内容**
   // 系列包排在前面：日期包里的同名书更「近」，让它覆盖系列包那份
-  for (const date of await allSlots()) {
-    // listPackDates 是升序，所以后面的（更新的）会自然覆盖前面的同名书
-    const raw = await loadPackMeta(date)
+  for (const slot of await allSlots()) {
+    const raw = await loadPackMeta(slot)
     if (!raw) continue
     for (const piece of raw.manifest.pieces) {
       const path = piece.cover ?? piece.pages[0]?.image
       const ref = path ? raw.files[path] : undefined
-      byTitle.set(piece.title.trim(), { date, piece })
-      if (typeof ref === 'string') wanted.push({ key: `blob:${ref}`, title: piece.title.trim() })
-      else if (ref) byTitle.get(piece.title.trim())!.cover = ref // v1 老包
+      const book: LibraryBook = { date: slot, piece }
+      if (typeof ref === 'string') book.coverRef = blobKey(ref)
+      else if (ref) book.cover = ref // v1 老包
+      byTitle.set(piece.title.trim(), book)
     }
-  }
-  // 只把封面这一张图读进来 —— 早先是整包解析，等于为了列书架把全部素材
-  // （近百 MB）都读一遍
-  if (wanted.length) {
-    const covers = await getMany<Blob | undefined>(wanted.map((w) => w.key))
-    wanted.forEach((w, i) => {
-      const book = byTitle.get(w.title)
-      if (book && covers[i]) book.cover = covers[i]
-    })
   }
   // Map.set 覆盖已有键时保留的是「初次插入」的位置，所以不能靠插入顺序，
   // 必须显式按日期倒排才能让最近读的排在前面。
   // 系列包没有日期（槽位是 lib/…），按字典序会压在最前面，所以单独排到后面去
   return [...byTitle.values()].sort((a, b) => {
-    const sa = isSeriesSlot(a.date), sb = isSeriesSlot(b.date)
+    const sa = isSeriesSlot(a.date),
+      sb = isSeriesSlot(b.date)
     if (sa !== sb) return sa ? 1 : -1
     return b.date.localeCompare(a.date)
   })
 }
 
+/**
+ * 按需取封面，优先用缓存的缩略图；没有就现做一份并缓存。
+ * 书架只给**当前要显示的那几本**调这个 —— 折叠时是每组第一本，展开时再取那一组。
+ */
+export const loadCovers = async (books: LibraryBook[]): Promise<Map<string, Blob>> => {
+  const out = new Map<string, Blob>()
+  const need: { key: string; title: string }[] = []
+  for (const b of books) {
+    const t = b.piece.title.trim()
+    if (b.cover) out.set(t, b.cover)
+    else if (b.coverRef) need.push({ key: b.coverRef, title: t })
+  }
+  if (!need.length) return out
+
+  const thumbs = await getMany<Blob | undefined>(need.map((n) => thumbKey(n.key)))
+  const miss: { key: string; title: string }[] = []
+  need.forEach((n, i) => {
+    if (thumbs[i]) out.set(n.title, thumbs[i]!)
+    else miss.push(n)
+  })
+  if (!miss.length) return out
+
+  const fulls = await getMany<Blob | undefined>(miss.map((m) => m.key))
+  const toCache: [string, Blob][] = []
+  for (let i = 0; i < miss.length; i++) {
+    const full = fulls[i]
+    if (!full) continue
+    const th = await makeThumb(full)
+    out.set(miss[i].title, th ?? full) // 做不出来就退回原图，至少有封面
+    if (th) toCache.push([thumbKey(miss[i].key), th])
+  }
+  if (toCache.length) await setMany(toCache)
+  return out
+}
+
+/**
+ * 后台预热缩略图：把还没缓存的逐批做好，**不返回内容**。
+ *
+ * 必须等前台那几张画出来之后再调 —— 一上来就排 80 多张，会把文件夹图标挤到
+ * 二十几秒后才出现（实测踩过）。每批之间让出主线程。
+ */
+export const warmCovers = async (books: LibraryBook[], shouldStop?: () => boolean) => {
+  const keys = books.map((b) => b.coverRef).filter((k): k is string => !!k)
+  if (!keys.length) return
+  const have = await getMany<Blob | undefined>(keys.map(thumbKey))
+  const todo = keys.filter((_, i) => !have[i])
+  for (let i = 0; i < todo.length; i += 3) {
+    if (shouldStop?.()) return
+    const batch = todo.slice(i, i + 3)
+    const fulls = await getMany<Blob | undefined>(batch)
+    const out: [string, Blob][] = []
+    for (let j = 0; j < batch.length; j++) {
+      const full = fulls[j]
+      if (!full) continue
+      const th = await makeThumb(full)
+      if (th) out.push([thumbKey(batch[j]), th])
+    }
+    if (out.length) await setMany(out)
+    await new Promise((r) => setTimeout(r, 30))
+  }
+}
 
 // ---- 书目总表 & 当日计划生成 ----
 /**

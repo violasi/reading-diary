@@ -11,13 +11,9 @@
  * 不按日期分组：去重之后一本书只对应「最近一次出现的那天」，
  * 再按天分栏会让人误以为那天只读了这一本。
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { groupOf } from '../types'
-import { listLibrary, type LibraryBook } from '../lib/db'
-
-interface Shown extends LibraryBook {
-  coverUrl?: string
-}
+import { listLibrary, loadCovers, warmCovers, type LibraryBook } from '../lib/db'
 
 export default function Shelf({
   today,
@@ -28,37 +24,49 @@ export default function Shelf({
   onOpen: (date: string, pieceId: string) => void
   onExit: () => void
 }) {
-  const [books, setBooks] = useState<Shown[] | null>(null)
+  const [books, setBooks] = useState<LibraryBook[] | null>(null)
+  /**
+   * 封面按需加载：书名 → object URL。
+   * 封面是整页原图（一张约 150 KB），上百本一次性全读要十几 MB，平板上要卡好几秒。
+   * 书架默认全折叠，所以初次只取每组第一本当文件夹图标，展开哪组再取哪组。
+   */
+  const [covers, setCovers] = useState<Record<string, string>>({})
+  const urlsRef = useRef<string[]>([])
   /** 展开着的分组。默认全收起 —— 书架是「找书」的地方，不是「看全部」的地方 */
   const [open, setOpen] = useState<string[]>([])
 
+  /** 取一批书的封面，已经有的跳过。离开页面时统一回收 URL */
+  const ensureCovers = async (list: LibraryBook[]) => {
+    const want = list.filter((b) => !covers[b.piece.title.trim()])
+    if (!want.length) return
+    const got = await loadCovers(want)
+    const add: Record<string, string> = {}
+    for (const [title, blob] of got) {
+      const u = URL.createObjectURL(blob)
+      urlsRef.current.push(u)
+      add[title] = u
+    }
+    if (Object.keys(add).length) setCovers((c) => ({ ...c, ...add }))
+  }
+
   useEffect(() => {
     let alive = true
-    const urls: string[] = []
     void (async () => {
       const lib = await listLibrary()
-      // 读盘期间可能已经离开书架了。cleanup 早跑完的话它看到的 urls 还是空的，
-      // 晚建出来的 URL 就没人回收 —— 自己就地撤掉
       if (!alive) return
-      const shown: Shown[] = lib.map((b) => {
-        if (!b.cover) return b
-        const u = URL.createObjectURL(b.cover)
-        urls.push(u)
-        return { ...b, coverUrl: u }
-      })
-      if (!alive) return urls.forEach((u) => URL.revokeObjectURL(u))
-      setBooks(shown)
+      setBooks(lib)
     })()
     return () => {
       alive = false
-      urls.forEach((u) => URL.revokeObjectURL(u))
+      urlsRef.current.forEach(URL.revokeObjectURL)
+      urlsRef.current = []
     }
   }, [])
 
   /** 分组。组内保持 listLibrary 的顺序（最近读的在前），组间按组里最新那本排 */
   const groups = useMemo(() => {
     if (!books) return null
-    const m = new Map<string, Shown[]>()
+    const m = new Map<string, LibraryBook[]>()
     for (const b of books) {
       const k = groupOf(b.piece)
       ;(m.get(k) ?? m.set(k, []).get(k)!).push(b)
@@ -68,8 +76,28 @@ export default function Shelf({
       .sort((a, b) => b.newest.localeCompare(a.newest))
   }, [books])
 
-  const toggle = (name: string) =>
-    setOpen((o) => (o.includes(name) ? o.filter((x) => x !== name) : [...o, name]))
+  // 分组定了之后先把文件夹图标（每组第一本）取回来，**画出来之后**再后台预热其余的。
+  // 顺序不能反：预热一上来就排 80 多张缩略图，会把文件夹图标挤到 20 秒后才出现。
+  useEffect(() => {
+    if (!groups) return
+    let alive = true
+    void (async () => {
+      await ensureCovers(groups.map((g) => g.list[0]).filter(Boolean))
+      if (!alive) return
+      await warmCovers(books ?? [], () => !alive)
+    })()
+    return () => {
+      alive = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groups])
+
+  const toggle = (name: string) => {
+    const opening = !open.includes(name)
+    setOpen((o) => (opening ? [...o, name] : o.filter((x) => x !== name)))
+    // 展开时才取这一组的封面
+    if (opening) void ensureCovers(groups?.find((g) => g.name === name)?.list ?? [])
+  }
 
   return (
     <div className="flex h-full flex-col bg-sand">
@@ -108,9 +136,9 @@ export default function Shelf({
                     {/* 用组里第一本的封面当文件夹图标，比一个通用图标好认 */}
                     <span className="relative h-11 w-9 shrink-0">
                       <span className="absolute inset-0 translate-x-1 translate-y-0.5 rounded-md bg-[#e8e1d5]" />
-                      {g.list[0]?.coverUrl ? (
+                      {covers[g.list[0]?.piece.title.trim()] ? (
                         <img
-                          src={g.list[0].coverUrl}
+                          src={covers[g.list[0].piece.title.trim()]}
                           alt=""
                           className="absolute inset-0 h-full w-full rounded-md object-cover shadow-sm"
                         />
@@ -142,10 +170,15 @@ export default function Shelf({
                           className="tap overflow-hidden rounded-xl bg-sand text-left"
                         >
                           <div className="grid aspect-3/4 place-items-center bg-[#f6f2ea]">
-                            {b.coverUrl ? (
-                              <img src={b.coverUrl} alt="" className="h-full w-full object-cover" />
+                            {covers[b.piece.title.trim()] ? (
+                              <img
+                                src={covers[b.piece.title.trim()]}
+                                alt=""
+                                loading="lazy"
+                                className="h-full w-full object-cover"
+                              />
                             ) : (
-                              <span className="text-[11px] text-mute">无封面</span>
+                              <span className="text-[11px] text-mute">…</span>
                             )}
                           </div>
                           <div className="p-1.5">
