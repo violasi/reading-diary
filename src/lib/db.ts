@@ -637,12 +637,25 @@ export interface LibraryBook extends IndexedBook {
  *
  * **只读一次索引**，不碰 pack 记录（为什么见 BOOK_INDEX_KEY 那段注释）。
  */
-export const listLibrary = async (): Promise<LibraryBook[]> => {
-  const bySlot = await loadBookIndex()
+/**
+ * 把索引按书名合并成「一本书一条」。listLibrary 和 buildCatalogue 共用。
+ *
+ * **两件事来源不同，别混**：
+ * - 内容在哪个包里（slot/pieceId）取**最近的当日包** —— 那才是孩子真正读的那份；
+ * - 分组和难度序号（group/seq）取**系列包** —— 它明确带了 series/seq，权威。
+ *
+ * 分组必须以系列包为准，是因为当日包只有 `level`，而同一套书在不同日子的包里
+ * 叫法并不统一（有几本写成「牛津树自然拼读 Level 5」，系列包里是「Stage 4」）。
+ * 照当日包分组，书架上就会凭空多出几个只有一本书的组。
+ *
+ * 这两边以前各写了一份，结果书架有这个 bug、家长选书没有 —— 所以合到一处。
+ */
+const mergeBooks = (bySlot: Record<string, IndexedBook[]>): Map<string, LibraryBook> => {
   const byTitle = new Map<string, LibraryBook>()
-  // 系列包先放、当日包后放：同名时让当日包那份胜出，和 buildCatalogue 一致
-  // （书架点开后按 slot 找内容，两处不一致的话「书架点进去的」和
-  //   「生成计划算新旧的」会是两个不同的包）
+  /** 书名 → 系列包给的分组和序号 */
+  const fromSeries = new Map<string, { group: string; seq?: number }>()
+
+  // 系列包先放、当日包后放，同名时让当日包那份胜出（内容取最近读的那份）
   const slots = Object.keys(bySlot).sort((x, y) => {
     const sx = isSeriesSlot(x),
       sy = isSeriesSlot(y)
@@ -652,13 +665,26 @@ export const listLibrary = async (): Promise<LibraryBook[]> => {
   for (const slot of slots)
     for (const e of bySlot[slot]) {
       if (!e.title) continue
+      if (isSeriesSlot(slot)) fromSeries.set(e.title, { group: e.group, seq: e.seq })
       byTitle.set(e.title, { ...e, slot })
     }
 
+  // 分组拨回系列包的叫法；seq 只补不覆盖（当日包自己带了 seq 就信它）
+  for (const [title, meta] of fromSeries) {
+    const e = byTitle.get(title)
+    if (!e) continue
+    e.group = meta.group
+    if (e.seq === undefined) e.seq = meta.seq
+  }
+  return byTitle
+}
+
+export const listLibrary = async (): Promise<LibraryBook[]> => {
+  const books = [...mergeBooks(await loadBookIndex()).values()]
   // Map.set 覆盖已有键时保留的是「初次插入」的位置，所以不能靠插入顺序，
   // 必须显式按日期倒排才能让最近读的排在前面。
   // 系列包没有日期（槽位是 lib/…），按字典序会压在最前面，所以单独排到后面去
-  return [...byTitle.values()].sort((x, y) => {
+  return books.sort((x, y) => {
     const sx = isSeriesSlot(x.slot),
       sy = isSeriesSlot(y.slot)
     if (sx !== sy) return sx ? 1 : -1
@@ -825,36 +851,21 @@ const rankOf = (e: { seq?: number; level?: string }): number => {
 export const buildCatalogue = async (): Promise<CatalogEntry[]> => {
   const bySlot = await loadBookIndex()
   const dates = await listPackDates()
-  const seriesSlots = await listSeriesSlots()
   const byTitle = new Map<string, CatalogEntry>()
-  /** 系列包给的 group/seq 更权威（它明确带了 series/seq），最后覆盖回去 */
-  const fromSeries = new Map<string, { group: string; seq?: number }>()
+  for (const [title, b] of mergeBooks(bySlot))
+    byTitle.set(title, {
+      title,
+      lang: b.lang,
+      group: b.group,
+      level: b.level,
+      seq: b.seq,
+      slot: b.slot,
+      pieceId: b.pieceId,
+    })
 
-  for (const slot of [...seriesSlots, ...dates])
-    for (const e of bySlot[slot] ?? []) {
-      if (!e.title) continue
-      if (isSeriesSlot(slot)) fromSeries.set(e.title, { group: e.group, seq: e.seq })
-      byTitle.set(e.title, {
-        title: e.title,
-        lang: e.lang,
-        group: e.group,
-        level: e.level,
-        seq: e.seq,
-        // 后面的（日期更新的）会自然覆盖前面的，所以内容取最近那份
-        slot,
-        pieceId: e.pieceId,
-        lastRead: byTitle.get(e.title)?.lastRead,
-      })
-    }
-
-  for (const [title, meta] of fromSeries) {
-    const e = byTitle.get(title)
-    if (!e) continue
-    e.group = meta.group
-    if (e.seq === undefined) e.seq = meta.seq
-  }
-
-  // 进度是按「哪天的包里的哪个 piece」记的，得顺着索引映射回书名
+  // 进度是按「哪天的包里的哪个 piece」记的，得顺着索引映射回书名。
+  // 注意这里要走**每一个**当日包，不能只看合并后胜出的那个 slot ——
+  // 一本书可能是在更早的某天读完的，那天的包才有它的进度
   for (const date of dates) {
     const entries = bySlot[date]
     if (!entries?.length) continue
