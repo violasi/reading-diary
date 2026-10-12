@@ -255,6 +255,102 @@ export const listSeriesSlots = async () => (await get<string[]>('series')) ?? []
 /** 库里所有包的槽位：当日包（日期）+ 系列包（lib/…） */
 const allSlots = async () => [...(await listPackDates()), ...(await listSeriesSlots())]
 
+// ---- 书目索引 ----
+/**
+ * 书架和「生成计划」只要书名、分组、封面键这几样，**从不碰页面内容**。
+ * 可这些字段散在每个 pack 记录里，而一条 pack 记录装着整本书的页文本
+ * 加上几百条「路径 → 哈希」映射（实测全库 5730 条）—— 为了拿一行标题，
+ * 得把几兆结构化数据反序列化一遍。Mac 上几十毫秒无感，平板上就是点开
+ * 书架干等好几秒，而且包越多越慢。
+ *
+ * 所以单独落一份精简索引，书架改成**一次小读**。
+ *
+ * 按槽位分块存：导入新包时只改它那一块，不用重扫全库。书名撞车
+ * （同一本书既在系列包又在当日包里）留到读出来之后在内存里去重 ——
+ * 去重规则要是写进存储，改规则就得重建索引。
+ */
+const BOOK_INDEX_KEY = 'bookIndex'
+const BOOK_INDEX_V = 1
+
+export interface IndexedBook {
+  pieceId: string
+  title: string
+  lang: 'zh' | 'en'
+  group: string
+  level?: string
+  seq?: number
+  /** 多少页。书架要显示，单独记一个数字，省得为它去读整本的 pages */
+  pages: number
+  /** 封面 blob 的键 */
+  coverRef?: string
+  /** v1 老包的封面是直接塞在包记录里的 Blob，没有哈希键；记下路径，要用时回包里取 */
+  coverPath?: string
+}
+
+type BookIndex = { v: number; bySlot: Record<string, IndexedBook[]> }
+
+const indexEntries = (raw: RawPack): IndexedBook[] =>
+  raw.manifest.pieces.map((piece) => {
+    const path = piece.cover ?? piece.pages[0]?.image
+    const ref = path ? raw.files[path] : undefined
+    const e: IndexedBook = {
+      pieceId: piece.id,
+      title: piece.title.trim(),
+      lang: langOf(piece),
+      group: groupOf(piece),
+      level: piece.level,
+      seq: piece.seq,
+      pages: piece.pages.length,
+    }
+    if (typeof ref === 'string') e.coverRef = blobKey(ref)
+    else if (ref && path) e.coverPath = path // v1 老包
+    return e
+  })
+
+/**
+ * 读索引，顺手和真实的槽位列表对一遍：缺的补上、多的删掉。
+ *
+ * 对账是为了自愈 —— 老版本升上来时索引还不存在，或者哪次写到一半被杀，
+ * 都在这里补回来，不用人工清缓存。补的时候只读缺的那几个包，所以除了
+ * 升级后的第一次，这里永远只有一次 get。
+ */
+const loadBookIndex = async (): Promise<Record<string, IndexedBook[]>> => {
+  const stored = await get<BookIndex>(BOOK_INDEX_KEY)
+  const bySlot = stored?.v === BOOK_INDEX_V ? { ...stored.bySlot } : {}
+  const slots = await allSlots()
+  const live = new Set(slots)
+  let dirty = false
+
+  for (const slot of Object.keys(bySlot))
+    if (!live.has(slot)) {
+      delete bySlot[slot]
+      dirty = true
+    }
+  for (const slot of slots) {
+    if (bySlot[slot]) continue
+    const raw = await loadPackMeta(slot)
+    bySlot[slot] = raw ? indexEntries(raw) : []
+    dirty = true
+  }
+  if (dirty) await set(BOOK_INDEX_KEY, { v: BOOK_INDEX_V, bySlot } satisfies BookIndex)
+  return bySlot
+}
+
+/**
+ * 导入/删包后就地改索引里对应的那一块。
+ *
+ * 索引还没建过就直接跳过 —— 下次 loadBookIndex 会整个建起来，
+ * 在这儿抢着建等于把全库扫描挪到导入流程里。
+ */
+const patchBookIndex = async (slot: string, entries: IndexedBook[] | null) => {
+  const stored = await get<BookIndex>(BOOK_INDEX_KEY)
+  if (stored?.v !== BOOK_INDEX_V) return
+  const bySlot = { ...stored.bySlot }
+  if (entries) bySlot[slot] = entries
+  else delete bySlot[slot]
+  await set(BOOK_INDEX_KEY, { v: BOOK_INDEX_V, bySlot } satisfies BookIndex)
+}
+
 export const savePack = async (pack: StoredPack) => {
   const { date, series } = pack.manifest
   if (!date && !series) throw new Error('任务包既没有日期也没有系列名')
@@ -289,6 +385,9 @@ export const savePack = async (pack: StoredPack) => {
     [indexKey, [...all].sort()],
   ])
 
+  // 书目索引跟着改这一块，书架下次打开照样只读一次
+  await patchBookIndex(slot, indexEntries(raw))
+
   // 同槽位重新导入会顶掉旧包，旧包独有的 blob 就没人引用了
   await gcBlobs()
 }
@@ -312,6 +411,7 @@ export const listPackDates = async () => (await get<string[]>('dates')) ?? []
 export const deletePack = async (date: string) => {
   await del(`pack:${date}`)
   await set('dates', (await listPackDates()).filter((d) => d !== date))
+  await patchBookIndex(date, null)
   await gcBlobs()
 }
 
@@ -523,50 +623,46 @@ export const cleanupGradedRecordings = async (today = todayStr()) => {
   return { count, freed }
 }
 
-export interface LibraryBook {
-  /** 这本书最近一次出现在哪天的任务包里（系列包是 lib/<系列名>） */
-  date: string
-  piece: PackPiece
-  /**
-   * 封面 blob 的键。**列表不预载封面** —— 封面是整页原图，一张约 150 KB，
-   * 上百本十几 MB；书架默认折叠，一次性全读会卡好几秒。
-   * 要显示时用 loadCovers 按需取（优先用缩略图）。
-   */
-  coverRef?: string
-  /** v1 老包里封面直接就是 Blob，没有哈希可引用 */
-  cover?: Blob
+/** 书架上的一本书：索引里那几样 + 内容在哪个包里 */
+export interface LibraryBook extends IndexedBook {
+  /** 这本书最近一次出现在哪个包里（日期，或系列包的 lib/<系列名>） */
+  slot: string
 }
 
 /**
  * 图书馆：所有导入过的书，不管有没有交过录音。
  *
  * 按书名去重 —— 同一本书常常连着好几天都在任务包里（有的书要看很多天），
- * 书架上只该有一本；同名的以最新导入的那份为准。
+ * 书架上只该有一本。
+ *
+ * **只读一次索引**，不碰 pack 记录（为什么见 BOOK_INDEX_KEY 那段注释）。
  */
 export const listLibrary = async (): Promise<LibraryBook[]> => {
+  const bySlot = await loadBookIndex()
   const byTitle = new Map<string, LibraryBook>()
-  // 只读 manifest + 引用表，**不读封面内容**
-  // 系列包排在前面：日期包里的同名书更「近」，让它覆盖系列包那份
-  for (const slot of await allSlots()) {
-    const raw = await loadPackMeta(slot)
-    if (!raw) continue
-    for (const piece of raw.manifest.pieces) {
-      const path = piece.cover ?? piece.pages[0]?.image
-      const ref = path ? raw.files[path] : undefined
-      const book: LibraryBook = { date: slot, piece }
-      if (typeof ref === 'string') book.coverRef = blobKey(ref)
-      else if (ref) book.cover = ref // v1 老包
-      byTitle.set(piece.title.trim(), book)
+  // 系列包先放、当日包后放：同名时让当日包那份胜出，和 buildCatalogue 一致
+  // （书架点开后按 slot 找内容，两处不一致的话「书架点进去的」和
+  //   「生成计划算新旧的」会是两个不同的包）
+  const slots = Object.keys(bySlot).sort((x, y) => {
+    const sx = isSeriesSlot(x),
+      sy = isSeriesSlot(y)
+    if (sx !== sy) return sx ? -1 : 1
+    return x.localeCompare(y) // 日期升序，后放的（更新的）覆盖先放的
+  })
+  for (const slot of slots)
+    for (const e of bySlot[slot]) {
+      if (!e.title) continue
+      byTitle.set(e.title, { ...e, slot })
     }
-  }
+
   // Map.set 覆盖已有键时保留的是「初次插入」的位置，所以不能靠插入顺序，
   // 必须显式按日期倒排才能让最近读的排在前面。
   // 系列包没有日期（槽位是 lib/…），按字典序会压在最前面，所以单独排到后面去
-  return [...byTitle.values()].sort((a, b) => {
-    const sa = isSeriesSlot(a.date),
-      sb = isSeriesSlot(b.date)
-    if (sa !== sb) return sa ? 1 : -1
-    return b.date.localeCompare(a.date)
+  return [...byTitle.values()].sort((x, y) => {
+    const sx = isSeriesSlot(x.slot),
+      sy = isSeriesSlot(y.slot)
+    if (sx !== sy) return sx ? 1 : -1
+    return y.slot.localeCompare(x.slot)
   })
 }
 
@@ -582,12 +678,27 @@ export const loadCovers = async (
 ): Promise<Map<string, Blob>> => {
   const out = new Map<string, Blob>()
   const need: { key: string; title: string }[] = []
+  /** v1 老包：封面 Blob 躺在包记录里，没有哈希键可查，只能回包里捞 */
+  const legacy: LibraryBook[] = []
   for (const b of books) {
-    const t = b.piece.title.trim()
-    if (b.cover) out.set(t, b.cover)
-    else if (b.coverRef) need.push({ key: b.coverRef, title: t })
+    if (b.coverRef) need.push({ key: b.coverRef, title: b.title })
+    else if (b.coverPath) legacy.push(b)
   }
-  if (!need.length) return out
+
+  // 老包极少（迁移过的都没有），放最后慢慢捞，不挡住新包那批
+  const sweepLegacy = async () => {
+    for (const b of legacy) {
+      const f = (await loadPackMeta(b.slot))?.files[b.coverPath!]
+      if (!(f instanceof Blob)) continue
+      const th = (await makeThumb(f)) ?? f
+      out.set(b.title, th)
+      onOne?.(b.title, th)
+    }
+  }
+  if (!need.length) {
+    await sweepLegacy()
+    return out
+  }
 
   const thumbs = await getMany<Blob | undefined>(need.map((n) => thumbKey(n.key)))
   const miss: { key: string; title: string }[] = []
@@ -597,7 +708,10 @@ export const loadCovers = async (
       onOne?.(n.title, thumbs[i]!)
     } else miss.push(n)
   })
-  if (!miss.length) return out
+  if (!miss.length) {
+    await sweepLegacy()
+    return out
+  }
 
   const fulls = await getMany<Blob | undefined>(miss.map((m) => m.key))
   const toCache: [string, Blob][] = []
@@ -610,6 +724,7 @@ export const loadCovers = async (
     if (th) toCache.push([thumbKey(miss[i].key), th])
   }
   if (toCache.length) await setMany(toCache)
+  await sweepLegacy()
   return out
 }
 
@@ -708,37 +823,29 @@ const rankOf = (e: { seq?: number; level?: string }): number => {
  * 读没读过只认**当日任务包的进度**（系列包不绑定日期，本身没有进度）。
  */
 export const buildCatalogue = async (): Promise<CatalogEntry[]> => {
+  const bySlot = await loadBookIndex()
   const dates = await listPackDates()
   const seriesSlots = await listSeriesSlots()
   const byTitle = new Map<string, CatalogEntry>()
-  /** slot → pieceId → 书名，回头把进度映射回书名要用 */
-  const idToTitle = new Map<string, Map<string, string>>()
   /** 系列包给的 group/seq 更权威（它明确带了 series/seq），最后覆盖回去 */
   const fromSeries = new Map<string, { group: string; seq?: number }>()
 
-  for (const slot of [...seriesSlots, ...dates]) {
-    const raw = await loadPackMeta(slot)
-    if (!raw) continue
-    const m = new Map<string, string>()
-    for (const piece of raw.manifest.pieces) {
-      const title = piece.title.trim()
-      if (!title) continue
-      m.set(piece.id, title)
-      if (isSeriesSlot(slot)) fromSeries.set(title, { group: groupOf(piece), seq: piece.seq })
-      byTitle.set(title, {
-        title,
-        lang: langOf(piece),
-        group: groupOf(piece),
-        level: piece.level,
-        seq: piece.seq,
+  for (const slot of [...seriesSlots, ...dates])
+    for (const e of bySlot[slot] ?? []) {
+      if (!e.title) continue
+      if (isSeriesSlot(slot)) fromSeries.set(e.title, { group: e.group, seq: e.seq })
+      byTitle.set(e.title, {
+        title: e.title,
+        lang: e.lang,
+        group: e.group,
+        level: e.level,
+        seq: e.seq,
         // 后面的（日期更新的）会自然覆盖前面的，所以内容取最近那份
         slot,
-        pieceId: piece.id,
-        lastRead: byTitle.get(title)?.lastRead,
+        pieceId: e.pieceId,
+        lastRead: byTitle.get(e.title)?.lastRead,
       })
     }
-    idToTitle.set(slot, m)
-  }
 
   for (const [title, meta] of fromSeries) {
     const e = byTitle.get(title)
@@ -747,12 +854,15 @@ export const buildCatalogue = async (): Promise<CatalogEntry[]> => {
     if (e.seq === undefined) e.seq = meta.seq
   }
 
+  // 进度是按「哪天的包里的哪个 piece」记的，得顺着索引映射回书名
   for (const date of dates) {
-    const m = idToTitle.get(date)
-    if (!m) continue
+    const entries = bySlot[date]
+    if (!entries?.length) continue
     const prog = await loadProgress(date)
-    for (const [pid, p] of Object.entries(prog)) {
-      if (!isPieceDone(p)) continue
+    const done = Object.entries(prog).filter(([, v]) => isPieceDone(v))
+    if (!done.length) continue
+    const m = new Map(entries.map((e) => [e.pieceId, e.title]))
+    for (const [pid] of done) {
       const title = m.get(pid)
       const e = title ? byTitle.get(title) : undefined
       if (e && (!e.lastRead || date > e.lastRead)) e.lastRead = date
@@ -920,6 +1030,10 @@ export const generateDayPlan = async (
     [`pack:${date}`, { manifest, files } satisfies RawPack],
     ['dates', [...all].sort()],
   ])
+  // 这里是自己写 pack 记录的（不走 savePack，因为素材全是现成的 blob，一个字节都不用新写），
+  // 所以索引也得自己补一刀 —— 漏了虽然 loadBookIndex 会对账补回来，但那次书架要多读一个包
+  await patchBookIndex(date, indexEntries({ manifest, files }))
+
   // 覆盖掉的旧包如果有独占素材，这里回收
   await gcBlobs()
   return { picks, empty, notes }

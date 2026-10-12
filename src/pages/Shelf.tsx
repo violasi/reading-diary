@@ -12,7 +12,6 @@
  * 再按天分栏会让人误以为那天只读了这一本。
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { groupOf } from '../types'
 import { listLibrary, loadCovers, warmCovers, type LibraryBook } from '../lib/db'
 
 export default function Shelf({
@@ -42,7 +41,7 @@ export default function Shelf({
    * 离开页面时统一回收 URL。
    */
   const ensureCovers = async (list: LibraryBook[]) => {
-    const want = list.filter((b) => !covers[b.piece.title.trim()])
+    const want = list.filter((b) => !covers[b.title])
     if (!want.length) return
     await loadCovers(want, (title, blob) => {
       const u = URL.createObjectURL(blob)
@@ -70,11 +69,11 @@ export default function Shelf({
     if (!books) return null
     const m = new Map<string, LibraryBook[]>()
     for (const b of books) {
-      const k = groupOf(b.piece)
+      const k = b.group
       ;(m.get(k) ?? m.set(k, []).get(k)!).push(b)
     }
     return [...m.entries()]
-      .map(([name, list]) => ({ name, list, newest: list[0]?.date ?? '' }))
+      .map(([name, list]) => ({ name, list, newest: list[0]?.slot ?? '' }))
       .sort((a, b) => b.newest.localeCompare(a.newest))
   }, [books])
 
@@ -138,9 +137,9 @@ export default function Shelf({
                     {/* 用组里第一本的封面当文件夹图标，比一个通用图标好认 */}
                     <span className="relative h-11 w-9 shrink-0">
                       <span className="absolute inset-0 translate-x-1 translate-y-0.5 rounded-md bg-[#e8e1d5]" />
-                      {covers[g.list[0]?.piece.title.trim()] ? (
+                      {covers[g.list[0]?.title] ? (
                         <img
-                          src={covers[g.list[0].piece.title.trim()]}
+                          src={covers[g.list[0].title]}
                           alt=""
                           className="absolute inset-0 h-full w-full rounded-md object-cover shadow-sm"
                         />
@@ -167,14 +166,14 @@ export default function Shelf({
                     <div className="grid grid-cols-3 gap-2.5 border-t border-[#f1ece3] p-2.5">
                       {g.list.map((b) => (
                         <button
-                          key={b.piece.title}
-                          onClick={() => onOpen(b.date, b.piece.id)}
+                          key={b.title}
+                          onClick={() => onOpen(b.slot, b.pieceId)}
                           className="tap overflow-hidden rounded-xl bg-sand text-left"
                         >
                           <div className="grid aspect-3/4 place-items-center bg-[#f6f2ea]">
-                            {covers[b.piece.title.trim()] ? (
+                            {covers[b.title] ? (
                               <img
-                                src={covers[b.piece.title.trim()]}
+                                src={covers[b.title]}
                                 alt=""
                                 loading="lazy"
                                 className="h-full w-full object-cover"
@@ -185,10 +184,10 @@ export default function Shelf({
                           </div>
                           <div className="p-1.5">
                             <div className="truncate text-[11.5px] leading-tight font-bold">
-                              {b.piece.title}
+                              {b.title}
                             </div>
                             <div className="mt-0.5 text-[10px] text-mute">
-                              {b.piece.pages.length} 页{b.date === today ? ' · 今天' : ''}
+                              {b.pages} 页{b.slot === today ? ' · 今天' : ''}
                             </div>
                           </div>
                         </button>
