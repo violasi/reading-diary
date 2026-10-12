@@ -137,27 +137,75 @@ const thumbKey = (blobK: string) => `thumb:${blobK.slice(5)}`
 /**
  * 生成封面缩略图。
  *
- * ⚠ **必须用 WebP 编码**。实测同一张图，在这个 WebView 上：
- *     canvas → JPEG   约 1000 ms/张
- *     canvas → WebP   约    9 ms/张   ← 快 110 倍
- * OffscreenCanvas.convertToBlob 和 HTMLCanvas.toBlob 编 JPEG 都慢得离谱
- * （9 张封面要 10 秒，书架直接卡死）。WebP 安卓 WebView 原生支持。
+ * ⚠ 两件事都是实测踩出来的：
+ * 1. **必须用 WebP 编码**。同一张图 canvas→JPEG 约 1000 ms/张、canvas→WebP 约
+ *    9 ms/张，差 110 倍。convertToBlob 和 toBlob 编 JPEG 都慢得离谱。
+ * 2. **OffscreenCanvas 不能假定存在**。老一点的安卓 WebView 没有它；一旦这里
+ *    返回 undefined，调用方每次都退回读整页原图（一张 150 KB），缩略图缓存
+ *    形同虚设，书架会一直慢。所以依次退：OffscreenCanvas → 普通 canvas.toBlob
+ *    → canvas.toDataURL，最后才放弃。
  *
- * 失败就返回 undefined，调用方退回用原图 —— 慢一点，但不能因为缩略图挂掉就没封面。
+ * 解码时就让它出小图（resizeWidth），省一次整张大图的解码和内存。
  */
+let thumbMode: 'offscreen' | 'canvas' | 'dataurl' | 'none' | null = null
+export const getThumbMode = () => thumbMode
+
 async function makeThumb(blob: Blob): Promise<Blob | undefined> {
+  let bmp: ImageBitmap
   try {
-    const bmp = await createImageBitmap(blob)
-    const scale = Math.min(1, THUMB_W / bmp.width)
-    const w = Math.max(1, Math.round(bmp.width * scale))
-    const h = Math.max(1, Math.round(bmp.height * scale))
-    const canvas = new OffscreenCanvas(w, h)
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return undefined
+    bmp = await createImageBitmap(blob, { resizeWidth: THUMB_W, resizeQuality: 'medium' })
+  } catch {
+    try {
+      bmp = await createImageBitmap(blob)
+    } catch {
+      return undefined
+    }
+  }
+  const scale = Math.min(1, THUMB_W / bmp.width)
+  const w = Math.max(1, Math.round(bmp.width * scale))
+  const h = Math.max(1, Math.round(bmp.height * scale))
+
+  try {
+    if (typeof OffscreenCanvas !== 'undefined') {
+      const cv = new OffscreenCanvas(w, h)
+      const ctx = cv.getContext('2d')
+      if (ctx) {
+        ctx.drawImage(bmp, 0, 0, w, h)
+        bmp.close()
+        thumbMode = 'offscreen'
+        return await cv.convertToBlob({ type: 'image/webp', quality: 0.82 })
+      }
+    }
+    const cv = document.createElement('canvas')
+    cv.width = w
+    cv.height = h
+    const ctx = cv.getContext('2d')
+    if (!ctx) {
+      bmp.close()
+      thumbMode = 'none'
+      return undefined
+    }
     ctx.drawImage(bmp, 0, 0, w, h)
     bmp.close()
-    return await canvas.convertToBlob({ type: 'image/webp', quality: 0.82 })
+    const viaToBlob = await new Promise<Blob | null>((res) => cv.toBlob(res, 'image/webp', 0.82))
+    if (viaToBlob) {
+      thumbMode = 'canvas'
+      return viaToBlob
+    }
+    const url = cv.toDataURL('image/webp', 0.82)
+    if (url.startsWith('data:image/webp')) {
+      thumbMode = 'dataurl'
+      return await (await fetch(url)).blob()
+    }
+    thumbMode = 'none'
+    return undefined
   } catch {
+    try {
+      bmp.close()
+    } catch {
+      /* 已经关过了 */
+    }
+    thumbMode = 'none'
     return undefined
   }
 }
@@ -526,7 +574,12 @@ export const listLibrary = async (): Promise<LibraryBook[]> => {
  * 按需取封面，优先用缓存的缩略图；没有就现做一份并缓存。
  * 书架只给**当前要显示的那几本**调这个 —— 折叠时是每组第一本，展开时再取那一组。
  */
-export const loadCovers = async (books: LibraryBook[]): Promise<Map<string, Blob>> => {
+export const loadCovers = async (
+  books: LibraryBook[],
+  /** 每取到一张就回调一次。书架用它做**渐进显示** —— 全部做完才一起显示的话，
+   *  首次打开会空白好几秒（一张缩略图要 30 ms 上下，十几张就是半秒到几秒） */
+  onOne?: (title: string, blob: Blob) => void,
+): Promise<Map<string, Blob>> => {
   const out = new Map<string, Blob>()
   const need: { key: string; title: string }[] = []
   for (const b of books) {
@@ -539,8 +592,10 @@ export const loadCovers = async (books: LibraryBook[]): Promise<Map<string, Blob
   const thumbs = await getMany<Blob | undefined>(need.map((n) => thumbKey(n.key)))
   const miss: { key: string; title: string }[] = []
   need.forEach((n, i) => {
-    if (thumbs[i]) out.set(n.title, thumbs[i]!)
-    else miss.push(n)
+    if (thumbs[i]) {
+      out.set(n.title, thumbs[i]!)
+      onOne?.(n.title, thumbs[i]!)
+    } else miss.push(n)
   })
   if (!miss.length) return out
 
@@ -551,6 +606,7 @@ export const loadCovers = async (books: LibraryBook[]): Promise<Map<string, Blob
     if (!full) continue
     const th = await makeThumb(full)
     out.set(miss[i].title, th ?? full) // 做不出来就退回原图，至少有封面
+    onOne?.(miss[i].title, th ?? full)
     if (th) toCache.push([thumbKey(miss[i].key), th])
   }
   if (toCache.length) await setMany(toCache)
@@ -582,6 +638,30 @@ export const warmCovers = async (books: LibraryBook[], shouldStop?: () => boolea
     if (out.length) await setMany(out)
     await new Promise((r) => setTimeout(r, 30))
   }
+}
+
+/**
+ * 书架封面缩略图缓存情况。家长页摆出来 —— 书架慢不慢全看这个缓存建没建起来，
+ * 出问题时一眼能看出是「还没补完」还是「这台设备压根生成不了」。
+ *
+ * 能力是**当场探一张小图**，不依赖模块内记录的状态（家长页和书架可能拿到
+ * 不同的模块实例，那个状态会是 unknown）。
+ */
+export const coverCacheStatus = async () => {
+  const lib = await listLibrary()
+  const refs = lib.map((b) => b.coverRef).filter((k): k is string => !!k)
+  const have = await getMany<Blob | undefined>(refs.map(thumbKey))
+  let mode = 'none'
+  try {
+    const probe = new Blob(
+      [Uint8Array.from(atob('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'), (c) => c.charCodeAt(0))],
+      { type: 'image/gif' },
+    )
+    if (await makeThumb(probe)) mode = thumbMode ?? 'ok'
+  } catch {
+    mode = 'none'
+  }
+  return { cached: have.filter(Boolean).length, total: refs.length, mode }
 }
 
 // ---- 书目总表 & 当日计划生成 ----

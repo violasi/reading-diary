@@ -35,18 +35,20 @@ export default function Shelf({
   /** 展开着的分组。默认全收起 —— 书架是「找书」的地方，不是「看全部」的地方 */
   const [open, setOpen] = useState<string[]>([])
 
-  /** 取一批书的封面，已经有的跳过。离开页面时统一回收 URL */
+  /**
+   * 取一批书的封面，已经有的跳过。**逐张显示**，不等全部做完 ——
+   * 一张缩略图首次生成要 30 ms 上下，十几张在平板上就是好几秒，
+   * 攒齐再一起显示的话这几秒里书架是空白的，看起来就是「卡住了」。
+   * 离开页面时统一回收 URL。
+   */
   const ensureCovers = async (list: LibraryBook[]) => {
     const want = list.filter((b) => !covers[b.piece.title.trim()])
     if (!want.length) return
-    const got = await loadCovers(want)
-    const add: Record<string, string> = {}
-    for (const [title, blob] of got) {
+    await loadCovers(want, (title, blob) => {
       const u = URL.createObjectURL(blob)
       urlsRef.current.push(u)
-      add[title] = u
-    }
-    if (Object.keys(add).length) setCovers((c) => ({ ...c, ...add }))
+      setCovers((c) => (c[title] ? c : { ...c, [title]: u }))
+    })
   }
 
   useEffect(() => {

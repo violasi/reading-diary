@@ -12,6 +12,7 @@ import {
   type PlanMode,
   recordingsFootprint,
   saveGenGroups,
+  coverCacheStatus,
   clearAllProgress,
   clearDay,
   loadProgress,
@@ -135,6 +136,8 @@ function ParentPanel({
   const [err, setErr] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [footprint, setFootprint] = useState<{ count: number; bytes: number } | null>(null)
+  // 书架慢不慢全看缩略图缓存建没建起来，摆出来好排查
+  const [thumbs, setThumbs] = useState<{ cached: number; total: number; mode: string } | null>(null)
   // 生成当日计划：家长勾选从哪些分组抽书（RAZ B 太简单就别勾）
   const [groups, setGroups] = useState<GroupStat[] | null>(null)
   const [picked, setPicked] = useState<string[]>([])
@@ -151,6 +154,9 @@ function ParentPanel({
   // 录音不自动清，所以把当前占用摆出来，家长自己判断要不要清
   const refreshFootprint = () => void recordingsFootprint().then(setFootprint)
   useEffect(refreshFootprint, [])
+  useEffect(() => {
+    void coverCacheStatus().then(setThumbs)
+  }, [])
 
   const refreshGroups = async () => setGroups(await listGroups())
   useEffect(() => {
@@ -500,6 +506,16 @@ function ParentPanel({
         {/* 维护区。清零放在最下面、样式压得很淡，避免家长评分时误触 */}
         <section className="mt-4 rounded-xl border border-[#eae5dd] bg-white p-3">
           <h3 className="text-[11px] font-bold tracking-wide text-mute">维护</h3>
+          {thumbs && (
+            <p className="mt-1.5 text-[11px] text-mute">
+              书架封面缩略图：{thumbs.cached}/{thumbs.total} 已缓存
+              {thumbs.mode === 'none'
+                ? '（⚠ 这台设备生成不了缩略图，书架会偏慢）'
+                : thumbs.cached < thumbs.total
+                  ? '（打开书架时会继续补）'
+                  : ''}
+            </p>
+          )}
           <div className="mt-2 space-y-1.5">
             <MaintRow
               label="清理已评分的旧录音"
