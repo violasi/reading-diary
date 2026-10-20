@@ -500,10 +500,15 @@ export const loadDaySummary = async (date: string) => {
  * 老日子的日历和星星就不会因为改版而回退。不写迁移：推导比改写数据安全，
  * 而且孩子点过一次「读完了」之后就会存下真正的 finished。
  */
-export const loadProgress = async (date: string): Promise<DayProgress> => {
-  const raw = (await get<Record<string, Partial<DayProgress[string]>>>(`progress:${date}`)) ?? {}
+type RawProgress = Record<string, Partial<DayProgress[string]>>
+
+/**
+ * 补齐老记录。单独抽出来是因为批量读进度的那条路（loadReadDates）也要走同一套 ——
+ * 少补一次，老日子里读过的书就会显示成没读过。
+ */
+const normalizeProgress = (raw: RawProgress | undefined): DayProgress => {
   const out: DayProgress = {}
-  for (const [id, p] of Object.entries(raw)) {
+  for (const [id, p] of Object.entries(raw ?? {})) {
     const merged = { ...emptyProgress(), ...p }
     // 关卡时代的记录没有 finished，那时的「读完」= 交了录音 / 浏览完了
     if (p.finished === undefined) merged.finished = !!(p.recorded || p.browsed)
@@ -516,6 +521,9 @@ export const loadProgress = async (date: string): Promise<DayProgress> => {
   }
   return out
 }
+
+export const loadProgress = async (date: string): Promise<DayProgress> =>
+  normalizeProgress(await get<RawProgress>(`progress:${date}`))
 
 export const saveProgress = (date: string, p: DayProgress) => set(`progress:${date}`, p)
 
@@ -912,9 +920,55 @@ const rankOf = (e: { seq?: number; level?: string }): number => {
  *
  * 读没读过只认**当日任务包的进度**（系列包不绑定日期，本身没有进度）。
  */
+/**
+ * 书名 → 最近一次读完的日期。没读过的就不在表里。
+ *
+ * **「读过」的判定全库只有这一份**：书架的进度和生成计划的新旧判断都走这里。
+ * 两处各写一份迟早会打架 —— 书架分组那个 bug 就是这么来的。
+ *
+ * 两条来源：当日任务包里标了读完的，和孩子自己从书架挑着读完的。
+ *
+ * 全程用 getMany 批量取：一天一个 get 的话，攒到两三个月就是上百次往返，
+ * 书架每打开一次都要等一回。
+ */
+export const loadReadDates = async (
+  bySlot?: Record<string, IndexedBook[]>,
+): Promise<Map<string, string>> => {
+  const idx = bySlot ?? (await loadBookIndex())
+  const out = new Map<string, string>()
+  const mark = (title: string, date: string) => {
+    const had = out.get(title)
+    if (!had || date > had) out.set(title, date)
+  }
+
+  // 进度是按「哪天的包里的哪个 piece」记的，得顺着索引映射回书名。
+  // 要走**每一个**当日包，不能只看书合并后胜出的那个槽位 ——
+  // 一本书可能是在更早的某天读完的，那天的包才有它的进度
+  const dates = await listPackDates()
+  const progs = await getMany<RawProgress | undefined>(dates.map((d) => `progress:${d}`))
+  dates.forEach((date, i) => {
+    const entries = idx[date]
+    if (!entries?.length) return
+    const byId = new Map(entries.map((e) => [e.pieceId, e.title]))
+    for (const [pid, p] of Object.entries(normalizeProgress(progs[i]))) {
+      if (!isPieceDone(p)) continue
+      const title = byId.get(pid)
+      if (title) mark(title, date)
+    }
+  })
+
+  // 自选阅读的条目自带书名，不用绕 pieceId
+  const exDates = await listExtraDates()
+  const exs = await getMany<ExtraRead[] | undefined>(exDates.map((d) => `extra:${d}`))
+  exDates.forEach((date, i) => {
+    for (const x of exs[i] ?? []) mark(x.title, date)
+  })
+
+  return out
+}
+
 export const buildCatalogue = async (): Promise<CatalogEntry[]> => {
   const bySlot = await loadBookIndex()
-  const dates = await listPackDates()
   const byTitle = new Map<string, CatalogEntry>()
   for (const [title, b] of mergeBooks(bySlot))
     byTitle.set(title, {
@@ -927,30 +981,10 @@ export const buildCatalogue = async (): Promise<CatalogEntry[]> => {
       pieceId: b.pieceId,
     })
 
-  // 进度是按「哪天的包里的哪个 piece」记的，得顺着索引映射回书名。
-  // 注意这里要走**每一个**当日包，不能只看合并后胜出的那个 slot ——
-  // 一本书可能是在更早的某天读完的，那天的包才有它的进度
-  for (const date of dates) {
-    const entries = bySlot[date]
-    if (!entries?.length) continue
-    const prog = await loadProgress(date)
-    const done = Object.entries(prog).filter(([, v]) => isPieceDone(v))
-    if (!done.length) continue
-    const m = new Map(entries.map((e) => [e.pieceId, e.title]))
-    for (const [pid] of done) {
-      const title = m.get(pid)
-      const e = title ? byTitle.get(title) : undefined
-      if (e && (!e.lastRead || date > e.lastRead)) e.lastRead = date
-    }
+  for (const [title, date] of await loadReadDates(bySlot)) {
+    const e = byTitle.get(title)
+    if (e) e.lastRead = date
   }
-
-  // 孩子自己从书架挑着读完的也算读过 —— 不然下次生成计划还会把它当新书排给他。
-  // 这些条目自带书名，不用再绕 pieceId 映射
-  for (const date of await listExtraDates())
-    for (const x of await loadExtraReads(date)) {
-      const e = byTitle.get(x.title)
-      if (e && (!e.lastRead || date > e.lastRead)) e.lastRead = date
-    }
 
   return [...byTitle.values()]
 }

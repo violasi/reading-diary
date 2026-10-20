@@ -12,7 +12,7 @@
  * 再按天分栏会让人误以为那天只读了这一本。
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { listLibrary, loadCovers, warmCovers, type LibraryBook } from '../lib/db'
+import { listLibrary, loadCovers, loadReadDates, warmCovers, type LibraryBook } from '../lib/db'
 
 export default function Shelf({
   today,
@@ -24,6 +24,11 @@ export default function Shelf({
   onExit: () => void
 }) {
   const [books, setBooks] = useState<LibraryBook[] | null>(null)
+  /**
+   * 书名 → 最近读完的日期。判定在 db.ts 的 loadReadDates，书架不自己算 ——
+   * 和生成计划「哪本算旧书」必须是同一套标准，不然家长和孩子看到的对不上。
+   */
+  const [read, setRead] = useState<Map<string, string>>(new Map())
   /**
    * 封面按需加载：书名 → object URL。
    * 封面是整页原图（一张约 150 KB），上百本一次性全读要十几 MB，平板上要卡好几秒。
@@ -53,9 +58,10 @@ export default function Shelf({
   useEffect(() => {
     let alive = true
     void (async () => {
-      const lib = await listLibrary()
+      const [lib, r] = await Promise.all([listLibrary(), loadReadDates()])
       if (!alive) return
       setBooks(lib)
+      setRead(r)
     })()
     return () => {
       alive = false
@@ -73,9 +79,19 @@ export default function Shelf({
       ;(m.get(k) ?? m.set(k, []).get(k)!).push(b)
     }
     return [...m.entries()]
-      .map(([name, list]) => ({ name, list, newest: list[0]?.slot ?? '' }))
+      .map(([name, list]) => {
+        const done = list.filter((b) => read.has(b.title)).length
+        return {
+          name,
+          list,
+          done,
+          // 向下取整：没全读完就别显示 100%，不然孩子会以为这套读完了
+          pct: list.length ? Math.floor((done / list.length) * 100) : 0,
+          newest: list[0]?.slot ?? '',
+        }
+      })
       .sort((a, b) => b.newest.localeCompare(a.newest))
-  }, [books])
+  }, [books, read])
 
   // 分组定了之后先把文件夹图标（每组第一本）取回来，**画出来之后**再后台预热其余的。
   // 顺序不能反：预热一上来就排 80 多张缩略图，会把文件夹图标挤到 20 秒后才出现。
@@ -151,7 +167,20 @@ export default function Shelf({
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[13px] font-bold">{g.name}</span>
-                      <span className="mt-0.5 block text-[11px] text-mute">{g.list.length} 本</span>
+                      <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-mute">
+                        <span className="shrink-0">
+                          读过 {g.done}/{g.list.length}
+                        </span>
+                        {/* 条比数字好认 —— 孩子还不太读得懂百分数，但看得懂「填了多少」。
+                            宽度钉死不拉满：撑满整行的话，0% 的那些组看着像一排空轨道 */}
+                        <span className="h-1.5 w-20 shrink-0 overflow-hidden rounded-full bg-[#eee7dc]">
+                          <span
+                            className="block h-full rounded-full bg-[#9ec8ab] transition-[width]"
+                            style={{ width: `${g.pct}%` }}
+                          />
+                        </span>
+                        <span className="shrink-0 tabular-nums">{g.pct}%</span>
+                      </span>
                     </span>
                     <span
                       className={`shrink-0 text-[15px] text-[#b5ab9c] transition-transform ${
@@ -170,24 +199,37 @@ export default function Shelf({
                           onClick={() => onOpen(b.slot, b.pieceId)}
                           className="tap overflow-hidden rounded-xl bg-sand text-left"
                         >
-                          <div className="grid aspect-3/4 place-items-center bg-[#f6f2ea]">
+                          <div className="relative grid aspect-3/4 place-items-center bg-[#f6f2ea]">
                             {covers[b.title] ? (
                               <img
                                 src={covers[b.title]}
                                 alt=""
                                 loading="lazy"
-                                className="h-full w-full object-cover"
+                                className={`h-full w-full object-cover ${
+                                  read.has(b.title) ? '' : 'opacity-70'
+                                }`}
                               />
                             ) : (
                               <span className="text-[11px] text-mute">…</span>
+                            )}
+                            {/* 读过的盖个角标。没读过的不画标记、只把封面压淡一点 ——
+                                满屏都是「○」会让没读的那些显得像待办清单 */}
+                            {read.has(b.title) && (
+                              <span className="absolute top-1 right-1 grid h-5 w-5 place-items-center rounded-full bg-[#3fae63] text-[11px] leading-none font-bold text-white shadow">
+                                ✓
+                              </span>
                             )}
                           </div>
                           <div className="p-1.5">
                             <div className="truncate text-[11.5px] leading-tight font-bold">
                               {b.title}
                             </div>
-                            <div className="mt-0.5 text-[10px] text-mute">
-                              {b.pages} 页{b.slot === today ? ' · 今天' : ''}
+                            <div className="mt-0.5 truncate text-[10px] text-mute">
+                              {b.slot === today
+                                ? `${b.pages} 页 · 今天`
+                                : read.has(b.title)
+                                  ? `读过 · ${read.get(b.title)!.slice(5).replace('-', '/')}`
+                                  : `${b.pages} 页 · 没读过`}
                             </div>
                           </div>
                         </button>
