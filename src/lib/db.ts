@@ -1053,8 +1053,10 @@ export const generateDayPlan = async (
      * 不走 cat 里的 slot：今天的包要是已经生成过一次，昨天那本的 slot 会被
      * 今天这份顶掉，就找不回来了。直接查索引里那一天的条目。
      *
-     * 两本里挑哪本：优先挑**没标读完**的那本（读得不顺往往就没点「读完了」），
-     * 都读完了就挑难的那本。
+     * 两本里挑哪本：优先挑**点过「读完了」**的那本。
+     * 「读完了」是读完就点，读得顺不顺都会点，所以它标记的是「这本确实读过」，
+     * 不是「这本读得好」—— 没点的那本多半压根没读，复习它没意义。
+     * 都点过（或都没点）就挑难的那本。
      */
     let prevPick: CatalogEntry | undefined
     let prevDate: string | undefined
@@ -1066,8 +1068,8 @@ export const generateDayPlan = async (
         const mine = idx
           .map((e) => ({ e, c: pool.find((x) => x.title === e.title) }))
           .filter((x): x is { e: IndexedBook; c: CatalogEntry } => !!x.c)
-        const unfinished = mine.filter((x) => !isPieceDone(prog[x.e.pieceId] ?? emptyProgress()))
-        const from = unfinished.length ? unfinished : mine
+        const read = mine.filter((x) => isPieceDone(prog[x.e.pieceId] ?? emptyProgress()))
+        const from = read.length ? read : mine
         prevPick = from.sort((a, b) => rankOf(b.c) - rankOf(a.c))[0]?.c
       }
       if (!prevPick)
