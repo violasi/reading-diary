@@ -1,8 +1,11 @@
 /**
- * 复习模式：孩子想再看一遍以前读过的书。
+ * 复习模式：孩子自己从书架挑一本来读。
  *
- * 刻意做得比阅读页轻 —— 没有关卡、不录音、不写任何进度。
- * 复习是「想看就看」，不该再算一次打卡，也不该把当天进度搅乱。
+ * 比阅读页轻 —— 不录音、不打星。但**读完了也算当天读过**：孩子自己挑的书
+ * 一样是读，不该因为不在当天任务里就不算数（见 db.ts 的 addExtraRead）。
+ *
+ * 算不算读过只认「读完了」这个按钮，不是一打开就算 —— 在书架上翻着玩
+ * 不该把打卡章盖上，那样连续天数就不作数了。
  */
 import { useState } from 'react'
 import type { PackPiece } from '../types'
@@ -14,10 +17,15 @@ import { Play } from '../components/Icons'
 export default function Review({
   piece,
   urls,
+  done,
+  onFinish,
   onExit,
 }: {
   piece: PackPiece
   urls: Record<string, string>
+  /** 今天已经把这本记成读过了 */
+  done: boolean
+  onFinish: () => void
   onExit: () => void
 }) {
   const [idx, setIdx] = useState(0)
@@ -78,7 +86,9 @@ export default function Review({
           ‹
         </button>
         <span className="truncate text-[13px] font-bold">{piece.title}</span>
-        <span className="ml-auto shrink-0 text-[11px] text-mute">复习</span>
+        <span className="ml-auto shrink-0 text-[11px] text-mute">
+          {done ? '今天读过 ✓' : '自己挑的'}
+        </span>
       </header>
 
       <div
@@ -125,11 +135,25 @@ export default function Review({
             {playMode === 'whole' ? '在放…（可以边听边翻页）' : '整本听'}
           </button>
         )}
-        {!pageAudio && !bookAudio && (
-          <p className="py-1 text-center text-[12px] text-mute">
-            左右翻页，和爸爸妈妈一起再看一遍（第 {idx + 1} / {piece.pages.length} 页）
-          </p>
-        )}
+        <button
+          onClick={onFinish}
+          disabled={done}
+          className={`tap mt-2 w-full rounded-2xl py-4 font-extrabold text-white ${
+            done
+              ? 'bg-[#9ec8ab] text-[15px]'
+              : idx >= last
+                ? 'bg-sun text-xl active:bg-sun/85'
+                : 'bg-sun/80 text-lg active:bg-sun/85'
+          } ${pageAudio || bookAudio ? '' : 'mt-0'}`}
+        >
+          {done ? '今天读过这本啦 ✓' : '读完了 ✓'}
+        </button>
+
+        <p className="mt-2 text-center text-[11.5px] text-mute">
+          {done
+            ? '已经算今天读过了，想再翻翻随时可以'
+            : `自己挑的书，读完了也算今天的打卡（第 ${idx + 1} / ${piece.pages.length} 页）`}
+        </p>
       </div>
     </div>
   )

@@ -155,14 +155,19 @@ export default function Me({
                 <span className="truncate">{b.title}</span>
                 {b.recorded && <span className="shrink-0 text-[10px] text-water">有录音</span>}
               </span>
-              <span className="flex shrink-0 gap-0.5">
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <Star
-                    key={n}
-                    className={`h-4 w-4 ${n <= b.stars ? 'text-sun' : 'text-[#ddd6ca]'}`}
-                  />
-                ))}
-              </span>
+              {/* 自选的书没有星 —— 画五颗空星会看着像家长忘了打分，直接说明来历 */}
+              {b.extra ? (
+                <span className="shrink-0 text-[10px] text-mute">自己挑的</span>
+              ) : (
+                <span className="flex shrink-0 gap-0.5">
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <Star
+                      key={n}
+                      className={`h-4 w-4 ${n <= b.stars ? 'text-sun' : 'text-[#ddd6ca]'}`}
+                    />
+                  ))}
+                </span>
+              )}
             </div>
           ))}
         </section>

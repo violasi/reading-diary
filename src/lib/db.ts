@@ -12,6 +12,7 @@
  *                     首次用到时生成并缓存；对应 blob 被回收时一起回收
  *   progress:<date>   当天各篇进度
  *   rec:<date>:<pid>  孩子交的录音 Blob
+ *   extra:<date>      当天孩子自己从书架挑着读完的书（当日任务之外的）
  *   stars:<date>      家长打的星
  *   done:<date>       当天至少读完一本 —— 打卡章。注意日历不只看这个键，
  *                     loadDoneDates 还会扫 progress: 取并集（见那里的说明）
@@ -45,6 +46,12 @@ interface RawPack {
 
 export const todayStr = (d = new Date()) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+/** 日历上的前一天。用本地时间加减，和 todayStr 保持同一套时区口径 */
+export const prevDay = (date: string) => {
+  const [y, m, d] = date.split('-').map(Number)
+  return todayStr(new Date(y, m - 1, d - 1))
+}
 
 /**
  * 数据结构版本。
@@ -449,23 +456,38 @@ export const gcBlobs = async (): Promise<{ removed: number }> => {
  * 把那天的素材整包解析出来纯属浪费（一天可能十几 MB）。
  */
 export const loadDaySummary = async (date: string) => {
-  const [raw, stars, done, prog] = await Promise.all([
+  const [raw, stars, done, prog, extra] = await Promise.all([
     loadPackMeta(date),
     loadStars(date),
     get<boolean>(`done:${date}`),
     loadProgress(date),
+    loadExtraReads(date),
   ])
   return {
     date,
-    done: !!done,
-    books: (raw?.manifest.pieces ?? []).map((p) => ({
-      id: p.id,
-      title: p.title,
-      pages: p.pages.length,
-      stars: stars[p.id] ?? 0,
-      finished: isPieceDone(prog[p.id] ?? emptyProgress()),
-      recorded: !!(prog[p.id] ?? emptyProgress()).recorded,
-    })),
+    done: !!done || extra.length > 0,
+    books: [
+      ...(raw?.manifest.pieces ?? []).map((p) => ({
+        id: p.id,
+        title: p.title,
+        pages: p.pages.length,
+        stars: stars[p.id] ?? 0,
+        finished: isPieceDone(prog[p.id] ?? emptyProgress()),
+        recorded: !!(prog[p.id] ?? emptyProgress()).recorded,
+        /** 孩子自己从书架挑的，不是当天布置的任务 */
+        extra: false,
+      })),
+      // 自选阅读排在任务后面：任务是当天的正事，这些是额外读的
+      ...extra.map((e) => ({
+        id: `extra:${e.pieceId}`,
+        title: e.title,
+        pages: e.pages,
+        stars: 0,
+        finished: true,
+        recorded: false,
+        extra: true,
+      })),
+    ],
   }
 }
 
@@ -522,6 +544,8 @@ export const loadDoneDates = async () => {
   const out = new Set<string>()
   for (const k of ks) {
     if (k.startsWith('done:')) out.add(k.slice('done:'.length))
+    // 只从书架挑着读的那天，当日任务可能一本没动，章全靠这个键
+    else if (k.startsWith('extra:')) out.add(k.slice('extra:'.length))
   }
   for (const k of ks) {
     if (!k.startsWith('progress:')) continue
@@ -532,6 +556,44 @@ export const loadDoneDates = async () => {
   }
   return [...out].sort()
 }
+
+// ---- 书架自选阅读 ----
+/**
+ * 孩子自己从书架挑的书，读完了也算当天读过。
+ *
+ * **为什么不写进 progress:<date>**：piece id 是每个包各自从 p1 编起的
+ * （实测 69 个包全都在用 p1…p15），书架那本的 id 几乎必然和当天任务里的某一本
+ * 撞号，写进去会把进度串到别的书上。所以单开一个键，条目自带书名和出处。
+ *
+ * 按书名去重 —— 同一本书在好几个包里都有，但对孩子来说就是同一本。
+ */
+export interface ExtraRead {
+  /** 内容在哪个包里，配合 pieceId 能找回原书 */
+  slot: string
+  pieceId: string
+  title: string
+  lang: 'zh' | 'en'
+  pages: number
+}
+
+export const loadExtraReads = async (date: string) =>
+  (await get<ExtraRead[]>(`extra:${date}`)) ?? []
+
+/** 记一本，并盖上当天的打卡章。重复读同一本不会记两条 */
+export const addExtraRead = async (date: string, book: ExtraRead) => {
+  const list = await loadExtraReads(date)
+  if (list.some((x) => x.title === book.title)) return list
+  const next = [...list, book]
+  await set(`extra:${date}`, next)
+  await markDayDone(date)
+  return next
+}
+
+/** 哪些天有自选阅读。和 loadDoneDates 一样靠扫键，不依赖额外索引 */
+const listExtraDates = async () =>
+  (await keys())
+    .filter((k): k is string => typeof k === 'string' && k.startsWith('extra:'))
+    .map((k) => k.slice('extra:'.length))
 
 // ---- 录音 ----
 export const saveRecording = (date: string, pieceId: string, blob: Blob) =>
@@ -560,6 +622,7 @@ export const clearDay = async (date: string) => {
     del(`stars:${date}`),
     del(`companion:${date}`), // 老版本留下的，顺手清
     del(`done:${date}`),
+    del(`extra:${date}`),
     ...ks.filter((k) => k.startsWith(`rec:${date}:`)).map((k) => del(k)),
   ])
 }
@@ -573,6 +636,7 @@ export const clearAllProgress = async () => {
       k.startsWith('stars:') ||
       k.startsWith('companion:') || // 老版本留下的
       k.startsWith('done:') ||
+      k.startsWith('extra:') ||
       k.startsWith('rec:'),
   )
   await Promise.all(doomed.map((k) => del(k)))
@@ -879,6 +943,15 @@ export const buildCatalogue = async (): Promise<CatalogEntry[]> => {
       if (e && (!e.lastRead || date > e.lastRead)) e.lastRead = date
     }
   }
+
+  // 孩子自己从书架挑着读完的也算读过 —— 不然下次生成计划还会把它当新书排给他。
+  // 这些条目自带书名，不用再绕 pieceId 映射
+  for (const date of await listExtraDates())
+    for (const x of await loadExtraReads(date)) {
+      const e = byTitle.get(x.title)
+      if (e && (!e.lastRead || date > e.lastRead)) e.lastRead = date
+    }
+
   return [...byTitle.values()]
 }
 
@@ -917,14 +990,14 @@ const pickOldest = (olds: CatalogEntry[]): CatalogEntry | undefined => {
 
 export interface PlanPick {
   lang: 'zh' | 'en'
-  kind: '新书' | '旧书'
+  kind: '新书' | '旧书' | '昨天'
   title: string
   group: string
 }
 
 /** 每种语言抽书的方式。家长按孩子当天状态选 */
-export type PlanMode = '1新1旧' | '2新' | '2旧'
-export const PLAN_MODES: PlanMode[] = ['1新1旧', '2新', '2旧']
+export type PlanMode = '1新1旧' | '2新' | '2旧' | '昨天+新'
+export const PLAN_MODES: PlanMode[] = ['1新1旧', '2新', '2旧', '昨天+新']
 export const loadPlanModes = async () =>
   (await get<Record<'zh' | 'en', PlanMode>>('planModes')) ?? { zh: '1新1旧' as PlanMode, en: '1新1旧' as PlanMode }
 export const savePlanModes = (m: Record<'zh' | 'en', PlanMode>) => set('planModes', m)
@@ -970,6 +1043,42 @@ export const generateDayPlan = async (
     const olds = pool.filter((e) => e.lastRead).sort((a, b) => a.lastRead!.localeCompare(b.lastRead!))
 
     const want = modes[lang] ?? '1新1旧'
+
+    /**
+     * 「昨天」那本：上一次布置的那天的书，用来隔天再读一遍读得不顺的。
+     *
+     * 认的是**上一个有任务包的日子**，不是日历上的昨天 —— 中间跳过几天
+     * （出门、生病）照样能复习到上次那本。
+     *
+     * 不走 cat 里的 slot：今天的包要是已经生成过一次，昨天那本的 slot 会被
+     * 今天这份顶掉，就找不回来了。直接查索引里那一天的条目。
+     *
+     * 两本里挑哪本：优先挑**没标读完**的那本（读得不顺往往就没点「读完了」），
+     * 都读完了就挑难的那本。
+     */
+    let prevPick: CatalogEntry | undefined
+    let prevDate: string | undefined
+    if (want === '昨天+新') {
+      prevDate = (await listPackDates()).filter((d) => d < date).sort().pop()
+      if (prevDate) {
+        const prog = await loadProgress(prevDate)
+        const idx = (await loadBookIndex())[prevDate] ?? []
+        const mine = idx
+          .map((e) => ({ e, c: pool.find((x) => x.title === e.title) }))
+          .filter((x): x is { e: IndexedBook; c: CatalogEntry } => !!x.c)
+        const unfinished = mine.filter((x) => !isPieceDone(prog[x.e.pieceId] ?? emptyProgress()))
+        const from = unfinished.length ? unfinished : mine
+        prevPick = from.sort((a, b) => rankOf(b.c) - rankOf(a.c))[0]?.c
+      }
+      if (!prevPick)
+        notes.push(
+          prevDate
+            ? `${label}昨天（${prevDate}）那本不在选中的分组里，改按常规抽`
+            : `${label}还没有更早的任务包，改按常规抽`,
+        )
+      else if (prevDate !== prevDay(date)) notes.push(`${label}「昨天」取的是 ${prevDate}`)
+    }
+
     const byRankOlds = [...olds].sort(byRank)
     const easyOld = byRankOlds[0]
     const hardOld = byRankOlds[byRankOlds.length - 1]
@@ -981,7 +1090,9 @@ export const generateDayPlan = async (
      * 前两项是家长选的方式，后面是兜底顺序。
      */
     const wish: [CatalogEntry | undefined, PlanPick['kind']][] =
-      want === '2新'
+      want === '昨天+新'
+        ? [[prevPick, '昨天'], [news[0], '新书'], [pickOldest(olds), '旧书'], [news[1], '新书'], [easyOld, '旧书']]
+        : want === '2新'
         ? [[news[0], '新书'], [news[1], '新书'], [pickOldest(olds), '旧书'], [easyOld, '旧书'], [hardOld, '旧书']]
         : want === '2旧'
           ? [[easyOld, '旧书'], [hardOld, '旧书'], [pickOldest(olds), '旧书'], [news[0], '新书'], [news[1], '新书']]
@@ -995,7 +1106,7 @@ export const generateDayPlan = async (
 
     // 没按选的方式凑齐就说明一下 —— 家长看得见才不会以为是 bug
     const mine = picks.filter((k) => k.lang === lang)
-    const wantNew = want === '2新' ? 2 : want === '2旧' ? 0 : 1
+    const wantNew = want === '2新' ? 2 : want === '2旧' ? 0 : 1 // 昨天+新 也是 1 本新书
     const gotNew = mine.filter((k) => k.kind === '新书').length
     if (mine.length < 2) notes.push(`${label}只凑出 ${mine.length} 本`)
     else if (gotNew !== wantNew)

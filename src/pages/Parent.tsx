@@ -206,7 +206,8 @@ function ParentPanel({
         setErr('勾选的分组里一本书都没有')
         return
       }
-      const line = picks.map((k) => `${k.kind === '新书' ? '新' : '旧'}·${k.title}`).join('，')
+      const mark = { 新书: '新', 旧书: '旧', 昨天: '昨' } as const
+      const line = picks.map((k) => `${mark[k.kind]}·${k.title}`).join('，')
       setNotice(
         `已生成 ${date} 的计划：${line}` +
           (empty.length ? `（${empty.join('、')}没有可选的书，跳过了）` : '') +
@@ -420,7 +421,9 @@ function ParentPanel({
           <h3 className="text-[11px] font-bold tracking-wide text-mute">生成今天的计划</h3>
           <p className="mt-1 text-[11px] leading-relaxed text-mute">
             中文、英文各抽两本，方式各自可选。新书挑没读过的里面最简单的，
-            旧书从最久没读的里面随机（两本旧书时取一易一难）。书不够会自动补齐并说明。
+            旧书从最久没读的里面随机（两本旧书时取一易一难）。
+            「昨天+新」是上次布置那天的书再读一遍，优先挑当时没点「读完了」的那本，
+            适合昨天读得不顺的时候。书不够会自动补齐并说明。
           </p>
 
           {groups === null && <p className="mt-2 text-[11px] text-mute">读取书库中…</p>}

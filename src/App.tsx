@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { DayProgress } from './types'
-import { emptyProgress, isPieceDone } from './types'
+import { emptyProgress, isPieceDone, langOf } from './types'
 import {
   migrate,
   setMigrationStatus,
+  addExtraRead,
+  loadExtraReads,
   loadDoneDates,
   markDayDone,
+  type ExtraRead,
   loadPack,
   loadProgress,
   saveProgress,
@@ -38,6 +41,8 @@ export default function App() {
   const [view, setView] = useState<View>({ name: 'home' })
   const [ready, setReady] = useState(false)
   const [doneDates, setDoneDates] = useState<string[]>([])
+  /** 今天从书架自己挑着读完的书。和当天任务分开存，见 db.ts 的 addExtraRead */
+  const [extras, setExtras] = useState<ExtraRead[]>([])
 
   // 首次加载：今天的任务包 + 进度 + 全部打卡日
   const reload = useCallback(async () => {
@@ -51,14 +56,16 @@ export default function App() {
     } catch {
       setMigrationStatus({ failed: ['*'], steps: ['迁移没跑起来'] })
     }
-    const [p, prog, done] = await Promise.all([
+    const [p, prog, done, ex] = await Promise.all([
       loadPack(date),
       loadProgress(date),
       loadDoneDates(),
+      loadExtraReads(date),
     ])
     setPack(p ?? null)
     setProgress(prog)
     setDoneDates(done)
+    setExtras(ex)
     setReady(true)
   }, [date])
 
@@ -228,7 +235,27 @@ export default function App() {
   if (view.name === 'review') {
     const piece = reviewPack?.manifest.pieces.find((p) => p.id === view.pieceId)
     if (!piece) return <div className="grid h-full place-items-center text-mute">载入中…</div>
-    return <Review piece={piece} urls={reviewUrls} onExit={() => setView({ name: 'shelf' })} />
+    // 记在**今天**名下，不是这本书所属任务包的那天
+    const already = extras.some((x) => x.title === piece.title.trim())
+    return (
+      <Review
+        piece={piece}
+        urls={reviewUrls}
+        done={already}
+        onFinish={async () => {
+          const next = await addExtraRead(date, {
+            slot: view.date,
+            pieceId: piece.id,
+            title: piece.title.trim(),
+            lang: langOf(piece),
+            pages: piece.pages.length,
+          })
+          setExtras(next)
+          setDoneDates((d) => (d.includes(date) ? d : [...d, date]))
+        }}
+        onExit={() => setView({ name: 'shelf' })}
+      />
+    )
   }
 
   if (view.name === 'read' && pack) {
